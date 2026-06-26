@@ -8,6 +8,8 @@ import 'model/pacote.dart';
 import 'entregas_page.dart';
 import 'menu_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/atualizacao_service.dart';
+import 'services/atualizacao_dialog.dart';
 
 List<Pacote> listaPacotes = [];
 
@@ -89,11 +91,30 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   bool carregando = true;
 
-  @override
-  void initState() {
-    super.initState();
-    _carregarEntregasFirebase();
+    @override
+    void initState() {
+      super.initState();
+
+      _carregarEntregasFirebase();
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _verificarAtualizacao();
+      });
+    }
+
+      Future<void> _verificarAtualizacao() async {
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (!mounted) return;
+
+    final service = AtualizacaoService();
+    final info = await service.verificarAtualizacao();
+
+    if (!mounted || info == null || !info.temAtualizacao) return;
+
+    await AtualizacaoDialog.mostrar(context, info);
   }
+
 
   Future<void> _carregarEntregasFirebase() async {
     try {
