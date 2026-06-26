@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "169491787982",
+    "project_id": "entrega-app-victor",
+    "storage_bucket": "entrega-app-victor.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:169491787982:android:e16b641842290da6b2a09f",
+        "android_client_info": {
+          "package_name": "com.example.entrega_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCR568rAke8pDJ_YZ-KNyCpdQ8cLL1WDtg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
