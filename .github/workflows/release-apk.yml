@@ -1,4 +1,4 @@
-name: Build e publicar APK
+name: Build APK Release
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build-release:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -26,43 +26,34 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
       - name: Instalar dependências
         run: flutter pub get
 
-      - name: Pegar versão do pubspec
+      - name: Pegar versão do pubspec.yaml
         id: version
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f1)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Gerar APK release
+      - name: Gerar APK
         run: flutter build apk --release
 
-      - name: Renomear APK
+      - name: Copiar APK
         run: cp build/app/outputs/flutter-apk/app-release.apk app-release.apk
 
-      - name: Criar tag se não existir
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-
-          if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
-            echo "Tag já existe"
-          else
-            git tag "${{ steps.version.outputs.tag }}"
-            git push origin "${{ steps.version.outputs.tag }}"
-          fi
-
-      - name: Publicar Release
+      - name: Criar Release ou atualizar existente
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
-            gh release upload "${{ steps.version.outputs.tag }}" app-release.apk --clobber
+          TAG="${{ steps.version.outputs.tag }}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" app-release.apk --clobber
           else
-            gh release create "${{ steps.version.outputs.tag }}" app-release.apk \
-              --title "Entrega App ${{ steps.version.outputs.tag }}" \
+            gh release create "$TAG" app-release.apk \
+              --title "Entrega App v${{ steps.version.outputs.version }}" \
               --notes "Atualização automática do Entrega App."
           fi
