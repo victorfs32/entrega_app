@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
@@ -144,6 +145,32 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
     });
 
     try {
+      final usuario = FirebaseAuth.instance.currentUser;
+
+      if (usuario == null) {
+        if (!mounted) return;
+
+        setState(() {
+          salvando = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Usuário não autenticado. Faça login novamente.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+
+        return;
+      }
+
+      final motoristaDoc = await FirebaseFirestore.instance
+          .collection('motoristas')
+          .doc(usuario.uid)
+          .get();
+
+      final motorista = motoristaDoc.data();
+
       final consulta = await FirebaseFirestore.instance
           .collection('entregas')
           .where('codigo', isEqualTo: widget.codigo)
@@ -155,13 +182,23 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
         'transportadora': widget.transportadora,
         'recebedor': nomeRecebedor,
         'entregue': true,
+
         'fotoPath': foto!.path,
         'fotoUrl': null,
         'fotoServerPath': null,
         'fotoSincronizada': false,
+
         'lat': lat,
         'lng': lng,
+
         'dataEntrega': Timestamp.now(),
+
+        'motoristaId': usuario.uid,
+        'motoristaEmail': usuario.email ?? '',
+        'motoristaNome': motorista?['nome'] ?? '',
+        'motoristaTelefone': motorista?['telefone'] ?? '',
+        'motoristaTransportadora':
+            motorista?['transportadora'] ?? widget.transportadora,
       };
 
       if (consulta.docs.isNotEmpty) {

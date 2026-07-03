@@ -10,6 +10,8 @@ import 'menu_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/atualizacao_service.dart';
 import 'services/atualizacao_dialog.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'login_page.dart';
 
 List<Pacote> listaPacotes = [];
 
@@ -74,14 +76,29 @@ class _MyAppState extends State<MyApp> {
           ),
           darkTheme: ThemeData.dark(useMaterial3: true),
           themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-          home: const HomePage(),
+          home: const AuthCheckPage(),
         );
       },
     );
   }
 }
+    class AuthCheckPage extends StatelessWidget {
+      const AuthCheckPage({super.key});
+
+      @override
+      Widget build(BuildContext context) {
+        final usuario = FirebaseAuth.instance.currentUser;
+
+        if (usuario != null) {
+          return const HomePage();
+        }
+
+        return const LoginPage();
+      }
+    }
 
 class HomePage extends StatefulWidget {
+  
   const HomePage({super.key});
 
   @override
@@ -89,7 +106,85 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  double valorPacote = 3.0;
   bool carregando = true;
+    String _iniciais(String nome) {
+    final partes = nome.trim().split(' ').where((e) => e.isNotEmpty).toList();
+
+    if (partes.isEmpty) return 'U';
+    if (partes.length == 1) return partes.first[0].toUpperCase();
+
+    return '${partes.first[0]}${partes.last[0]}'.toUpperCase();
+  }
+
+  Widget _topoUsuario() {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('motoristas')
+          .doc(FirebaseAuth.instance.currentUser!.uid)
+          .get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox(
+            height: 60,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final dados = snapshot.data!.data() as Map<String, dynamic>;
+
+        final nome = dados['nome'] ?? '';
+        final valor = dados['valorPacote'];
+
+          if (valor is int) {
+            valorPacote = valor.toDouble();
+          } else if (valor is double) {
+            valorPacote = valor;
+          }
+        final cargo =
+            dados['admin'] == true ? 'Administrador' : 'Motorista';
+
+        return Row(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: Colors.blue,
+              child: Text(
+                _iniciais(nome),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  cargo,
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 12,
+                  ),
+                ),
+
+                Text(
+                  nome,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
 
     @override
     void initState() {
@@ -118,8 +213,11 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _carregarEntregasFirebase() async {
     try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+
       final snapshot = await FirebaseFirestore.instance
           .collection('entregas')
+          .where('motoristaId', isEqualTo: uid)
           .orderBy('dataLeitura', descending: true)
           .get();
 
@@ -132,12 +230,16 @@ class _HomePageState extends State<HomePage> {
         listaPacotes.add(
           Pacote(
             codigo: dados['codigo'] ?? '',
+            userId: dados['motoristaId'],
             transportadora: dados['transportadora'] ?? '',
             dataLeitura: dataFirebase is Timestamp
                 ? dataFirebase.toDate()
                 : DateTime.now(),
             nomeRecebedor: dados['recebedor'] ?? '',
             fotoPath: dados['fotoPath'],
+            fotoUrl: dados['fotoUrl'],
+            fotoViewUrl: dados['fotoViewUrl'],
+            fotoDownloadUrl: dados['fotoDownloadUrl'],
             lat: (dados['lat'] as num?)?.toDouble(),
             lng: (dados['lng'] as num?)?.toDouble(),
             entregue: dados['entregue'] ?? true,
@@ -209,6 +311,102 @@ class _HomePageState extends State<HomePage> {
     return a.day == b.day && a.month == b.month && a.year == b.year;
   }
 
+      Widget _resumoDoDia({
+      required int entregasHoje,
+      required double ganhoHoje,
+      required int fotosPendentes,
+    }) {
+      const int metaDia = 80;
+      final progresso = entregasHoje / metaDia;
+      final porcentagem = (progresso * 100).clamp(0, 100).toInt();
+      final faltam = (metaDia - entregasHoje).clamp(0, metaDia);
+
+      return Card(
+        color: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF1E293B)
+            : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Resumo do dia',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              Row(
+                children: [
+                  const Icon(Icons.inventory_2, color: Colors.blue),
+                  const SizedBox(width: 10),
+                  Text('$entregasHoje entregas'),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              Row(
+                children: [
+                  const Icon(Icons.attach_money, color: Colors.green),
+                  const SizedBox(width: 10),
+                  Text('R\$ ${ganhoHoje.toStringAsFixed(2).replaceAll('.', ',')}'),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              Row(
+                children: [
+                  const Icon(Icons.cloud_upload, color: Colors.orange),
+                  const SizedBox(width: 10),
+                  Text('Fotos pendentes: $fotosPendentes'),
+                ],
+              ),
+
+              const SizedBox(height: 18),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Meta: $entregasHoje/$metaDia'),
+                  Text('$porcentagem%'),
+                ],
+              ),
+
+              const SizedBox(height: 8),
+
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: LinearProgressIndicator(
+                  value: progresso.clamp(0, 1),
+                  minHeight: 12,
+                  backgroundColor: Colors.grey.shade300,
+                  color: Colors.blue,
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              Text(
+                faltam == 0
+                    ? '🎉 Meta concluída!'
+                    : 'Faltam $faltam entregas para bater a meta',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
   @override
   Widget build(BuildContext context) {
     final hoje = DateTime.now();
@@ -218,20 +416,15 @@ class _HomePageState extends State<HomePage> {
     }).length;
 
     final totalBaixas = listaPacotes.where((p) => p.entregue).length;
-    final ganhoHoje = entregasHoje * 3;
+    final ganhoHoje = entregasHoje * valorPacote;
 
     final ultimasEntregas =
         listaPacotes.where((p) => p.entregue).take(5).toList();
 
+    final fotosPendentes = listaPacotes.where((p) {
+      return p.entregue && p.fotoUrl == null;}).length;
+
     return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: const Text(
-          'Entrega App',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-      ),
       body: carregando
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -243,6 +436,10 @@ class _HomePageState extends State<HomePage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 20),
+                    
+                    _topoUsuario(),
+
+                    const SizedBox(height: 25,),
 
                     Row(
                       children: [
@@ -315,7 +512,7 @@ class _HomePageState extends State<HomePage> {
                               child: Column(
                                 children: [
                                   Text(
-                                    'R\$ $ganhoHoje',
+                                    'R\$ ${ganhoHoje.toStringAsFixed(2).replaceAll('.', ',')}',
                                     style: const TextStyle(
                                       fontSize: 26,
                                       fontWeight: FontWeight.bold,
@@ -383,7 +580,15 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
 
-                    const SizedBox(height: 25),
+                    const SizedBox(height: 20),
+
+                      _resumoDoDia(
+                        entregasHoje: entregasHoje,
+                        ganhoHoje: ganhoHoje,
+                        fotosPendentes: fotosPendentes,
+                      ),
+
+                      const SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -403,7 +608,7 @@ class _HomePageState extends State<HomePage> {
         shape: const CircularNotchedRectangle(),
         notchMargin: 8,
         child: SizedBox(
-          height: 70,
+          height: 50,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [

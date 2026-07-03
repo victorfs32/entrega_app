@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import 'main.dart';
 
 class ConfiguracoesPage extends StatelessWidget {
@@ -6,6 +9,8 @@ class ConfiguracoesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final usuario = FirebaseAuth.instance.currentUser;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Configurações'),
@@ -15,7 +20,6 @@ class ConfiguracoesPage extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-
             ValueListenableBuilder<bool>(
               valueListenable: MyApp.darkMode,
               builder: (context, isDark, child) {
@@ -37,15 +41,40 @@ class ConfiguracoesPage extends StatelessWidget {
 
             const SizedBox(height: 10),
 
-            const Card(
-              child: ListTile(
-                leading: Icon(
-                  Icons.local_shipping,
-                  color: Colors.orange,
-                ),
-                title: Text('Valor por entrega'),
-                subtitle: Text('R\$ 3,00 por pacote'),
-              ),
+            FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance
+                  .collection('motoristas')
+                  .doc(usuario?.uid)
+                  .get(),
+              builder: (context, snapshot) {
+                double valorPacote = 3.0;
+
+                if (snapshot.hasData && snapshot.data!.exists) {
+                  final dados =
+                      snapshot.data!.data() as Map<String, dynamic>?;
+
+                  final valor = dados?['valorPacote'];
+
+                  if (valor is int) {
+                    valorPacote = valor.toDouble();
+                  } else if (valor is double) {
+                    valorPacote = valor;
+                  }
+                }
+
+                return Card(
+                  child: ListTile(
+                    leading: const Icon(
+                      Icons.local_shipping,
+                      color: Colors.orange,
+                    ),
+                    title: const Text('Valor por entrega'),
+                    subtitle: Text(
+                      'R\$ ${valorPacote.toStringAsFixed(2).replaceAll('.', ',')} por pacote',
+                    ),
+                  ),
+                );
+              },
             ),
 
             const SizedBox(height: 10),

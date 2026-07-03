@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'foto_zoom_page.dart';
 
+import 'foto_zoom_page.dart';
 import 'model/pacote.dart';
 
 class DetalhesEntregaPage extends StatelessWidget {
@@ -42,6 +42,21 @@ class DetalhesEntregaPage extends StatelessWidget {
     }
 
     return Icons.delivery_dining;
+  }
+
+  bool get _temFotoUrl {
+    return pacote.fotoUrl != null &&
+        pacote.fotoUrl!.trim().isNotEmpty &&
+        pacote.fotoUrl!.trim() != 'null';
+  }
+
+  bool get _temFotoLocal {
+    if (kIsWeb) return false;
+
+    return pacote.fotoPath != null &&
+        pacote.fotoPath!.trim().isNotEmpty &&
+        pacote.fotoPath!.trim() != 'null' &&
+        File(pacote.fotoPath!).existsSync();
   }
 
   Future<void> _abrirGoogleMaps(BuildContext context) async {
@@ -96,13 +111,75 @@ class DetalhesEntregaPage extends StatelessWidget {
     );
   }
 
+  Widget _fotoEntrega(BuildContext context) {
+    if (_temFotoUrl) {
+      return GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => FotoZoomPage(
+                imagemUrl: pacote.fotoUrl!,
+              ),
+            ),
+          );
+        },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Image.network(
+            pacote.fotoUrl!,
+            height: 260,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    "Erro ao carregar foto do Google Drive",
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
+
+    if (_temFotoLocal) {
+      return GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => FotoZoomPage(
+                imagemPath: pacote.fotoPath!,
+              ),
+            ),
+          );
+        },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Image.file(
+            File(pacote.fotoPath!),
+            height: 260,
+            width: double.infinity,
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
+    }
+
+    return const Card(
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Text("Nenhuma foto disponível para esta entrega"),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final fotoExiste = pacote.fotoPath != null &&
-        pacote.fotoPath!.isNotEmpty &&
-        !kIsWeb &&
-        File(pacote.fotoPath!).existsSync();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text("Comprovante da Baixa"),
@@ -114,7 +191,7 @@ class DetalhesEntregaPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Card(
-            color: const Color(0xFF1E293B),
+              color: const Color(0xFF1E293B),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -128,9 +205,7 @@ class DetalhesEntregaPage extends StatelessWidget {
                         size: 34,
                       ),
                     ),
-
                     const SizedBox(height: 12),
-
                     Text(
                       pacote.codigo,
                       textAlign: TextAlign.center,
@@ -139,9 +214,7 @@ class DetalhesEntregaPage extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-
                     const SizedBox(height: 6),
-
                     Text(
                       _transportadora,
                       style: const TextStyle(
@@ -152,9 +225,7 @@ class DetalhesEntregaPage extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
-
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -181,9 +252,7 @@ class DetalhesEntregaPage extends StatelessWidget {
                 ],
               ),
             ),
-
             const SizedBox(height: 16),
-
             _infoCard(
               icon: Icons.person,
               titulo: "Recebido por",
@@ -192,13 +261,11 @@ class DetalhesEntregaPage extends StatelessWidget {
                   ? "Não informado"
                   : pacote.nomeRecebedor!,
             ),
-
             _infoCard(
               icon: Icons.calendar_month,
               titulo: "Data e hora",
               valor: _dataFormatada(),
             ),
-
             _infoCard(
               icon: Icons.location_on,
               titulo: "Localização",
@@ -207,13 +274,12 @@ class DetalhesEntregaPage extends StatelessWidget {
                   : "GPS não disponível",
               iconColor: _temGps ? Colors.green : Colors.orange,
             ),
-
             if (_temGps)
               Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 height: 130,
                 decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                  color: const Color(0xFF1E293B),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: Colors.green.shade200),
                 ),
@@ -239,7 +305,6 @@ class DetalhesEntregaPage extends StatelessWidget {
                   ),
                 ),
               ),
-
             const Text(
               "Foto da entrega",
               style: TextStyle(
@@ -247,45 +312,8 @@ class DetalhesEntregaPage extends StatelessWidget {
                 fontSize: 16,
               ),
             ),
-
             const SizedBox(height: 10),
-
-            if (kIsWeb)
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    "Foto disponível apenas no aplicativo Android",
-                  ),
-                ),
-              )
-            else if (fotoExiste)
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => FotoZoomPage(
-                      imagemPath: pacote.fotoPath!,
-                    ),
-                  ),
-                );
-              },
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: Image.file(
-                  File(pacote.fotoPath!),
-                  fit: BoxFit.cover,
-                ),
-              ),
-            )
-            else
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text("Nenhuma foto salva para esta entrega"),
-                ),
-              ),
+            _fotoEntrega(context),
           ],
         ),
       ),

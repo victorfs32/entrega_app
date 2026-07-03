@@ -25,12 +25,36 @@ class _ScannerPageState extends State<ScannerPage> {
     super.dispose();
   }
 
+  String limparCodigo(String codigo) {
+    return codigo
+        .trim()
+        .replaceAll(' ', '')
+        .replaceAll('\n', '')
+        .replaceAll('\r', '')
+        .toUpperCase();
+  }
+
+  bool codigoValido(String codigo) {
+    final c = limparCodigo(codigo);
+
+    final codigoImile = RegExp(r'^\d{13}$');
+    final codigoAnjun = RegExp(r'^AJ\d{15}$');
+
+    return codigoImile.hasMatch(c) || codigoAnjun.hasMatch(c);
+  }
+
   String identificarTransportadora(String codigo) {
-    if (codigo.toUpperCase().startsWith('AJ')) {
+    final c = limparCodigo(codigo);
+
+    if (RegExp(r'^AJ\d{15}$').hasMatch(c)) {
       return 'Anjun';
     }
 
-    return 'iMile';
+    if (RegExp(r'^\d{13}$').hasMatch(c)) {
+      return 'iMile';
+    }
+
+    return 'Desconhecida';
   }
 
   void _onDetect(BarcodeCapture capture) {
@@ -41,9 +65,14 @@ class _ScannerPageState extends State<ScannerPage> {
 
     if (codigoLido == null || codigoLido.trim().isEmpty) return;
 
+    final codigo = limparCodigo(codigoLido);
+
+    if (!codigoValido(codigo)) {
+      return;
+    }
+
     jaLeu = true;
 
-    final codigo = codigoLido.trim();
     final transportadora = identificarTransportadora(codigo);
 
     Navigator.pushReplacement(

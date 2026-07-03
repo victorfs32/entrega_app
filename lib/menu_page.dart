@@ -2,12 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'entregas_page.dart';
 import 'relatorios_page.dart';
 import 'configuracoes_page.dart';
+import 'perfil_page.dart';
 
 class MenuPage extends StatefulWidget {
   const MenuPage({super.key});
@@ -17,8 +19,7 @@ class MenuPage extends StatefulWidget {
 }
 
 class _MenuPageState extends State<MenuPage> {
-  final String servidorFotos =
-    "https://servidor-fotos-entregas.vercel.app";
+  final String servidorFotos = "https://servidor-fotos-entregas.vercel.app";
 
   bool sincronizando = false;
   int totalEncontradas = 0;
@@ -40,15 +41,14 @@ class _MenuPageState extends State<MenuPage> {
   void _abrirEntregas(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const EntregasPage(),
-      ),
+      MaterialPageRoute(builder: (_) => const EntregasPage()),
     );
   }
 
   Future<Map<String, dynamic>> _enviarFotoParaServidor({
     required String codigo,
     required String fotoPath,
+    required String motoristaId,
   }) async {
     final arquivo = File(fotoPath);
 
@@ -60,6 +60,7 @@ class _MenuPageState extends State<MenuPage> {
 
     final request = http.MultipartRequest('POST', url);
     request.fields['codigo'] = codigo;
+    request.fields['motoristaId'] = motoristaId;
 
     request.files.add(
       await http.MultipartFile.fromPath(
@@ -69,10 +70,13 @@ class _MenuPageState extends State<MenuPage> {
     );
 
     final response = await request.send().timeout(
-          const Duration(seconds: 12),
+          const Duration(seconds: 60),
         );
 
     final responseBody = await response.stream.bytesToString();
+
+    print("Status: ${response.statusCode}");
+    print("Resposta: $responseBody");
 
     if (response.statusCode != 200) {
       throw Exception('Servidor respondeu erro: $responseBody');
@@ -80,8 +84,8 @@ class _MenuPageState extends State<MenuPage> {
 
     final decoded = jsonDecode(responseBody);
 
-    if (decoded['fotoUrl'] == null || decoded['fotoPath'] == null) {
-      throw Exception('Servidor não retornou fotoUrl/fotoPath');
+    if (decoded['fotoUrl'] == null) {
+      throw Exception('Servidor não retornou fotoUrl');
     }
 
     return decoded;
@@ -98,8 +102,7 @@ class _MenuPageState extends State<MenuPage> {
         return AlertDialog(
           title: const Text('Sincronizar fotos?'),
           content: const Text(
-            'O app vai procurar entregas no Firebase que tenham fotoPath, '
-            'Enviar fotos pendentes para o servidor online',
+            'O app vai enviar apenas as fotos pendentes do motorista logado.',
           ),
           actions: [
             TextButton(
@@ -125,6 +128,20 @@ class _MenuPageState extends State<MenuPage> {
   }) async {
     if (sincronizando) return;
 
+    final usuario = FirebaseAuth.instance.currentUser;
+
+    if (usuario == null) {
+      if (mostrarMensagemFinal && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Usuário não logado. Faça login novamente.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() {
       sincronizando = true;
       totalEncontradas = 0;
@@ -134,8 +151,12 @@ class _MenuPageState extends State<MenuPage> {
     });
 
     try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('entregas').get();
+      final uid = usuario.uid;
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('entregas')
+          .where('motoristaId', isEqualTo: uid)
+          .get();
 
       if (!mounted) return;
 
@@ -150,6 +171,12 @@ class _MenuPageState extends State<MenuPage> {
         final fotoPath = (dados['fotoPath'] ?? '').toString().trim();
         final fotoUrl = (dados['fotoUrl'] ?? '').toString().trim();
 
+        print('DOC: ${doc.id}');
+        print('motoristaId: ${dados['motoristaId']}');
+        print('codigo: $codigo');
+        print('fotoPath: $fotoPath');
+        print('fotoUrl: $fotoUrl');
+
         if (codigo.isEmpty || fotoPath.isEmpty) {
           if (!mounted) return;
           setState(() => totalIgnoradas++);
@@ -162,10 +189,13 @@ class _MenuPageState extends State<MenuPage> {
           continue;
         }
 
+        print('VAI ENVIAR FOTO: $codigo');
+
         try {
           final resultadoUpload = await _enviarFotoParaServidor(
             codigo: codigo,
             fotoPath: fotoPath,
+            motoristaId: uid,
           );
 
           await FirebaseFirestore.instance
@@ -173,7 +203,9 @@ class _MenuPageState extends State<MenuPage> {
               .doc(doc.id)
               .update({
             'fotoUrl': resultadoUpload['fotoUrl'],
-            'fotoServerPath': resultadoUpload['fotoPath'],
+            'fotoServerPath': resultadoUpload['fileId'],
+            'fotoViewUrl': resultadoUpload['fotoViewUrl'],
+            'fotoDownloadUrl': resultadoUpload['fotoDownloadUrl'],
             'fotoSincronizada': true,
             'dataSincronizacaoFoto': Timestamp.now(),
             'erroSincronizacaoFoto': FieldValue.delete(),
@@ -182,6 +214,8 @@ class _MenuPageState extends State<MenuPage> {
           if (!mounted) return;
           setState(() => totalEnviadas++);
         } catch (e) {
+          print('ERRO AO ENVIAR FOTO $codigo: $e');
+
           await FirebaseFirestore.instance
               .collection('entregas')
               .doc(doc.id)
@@ -201,7 +235,7 @@ class _MenuPageState extends State<MenuPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Finalizado. Enviadas: $totalEnviadas | Ignoradas: $totalIgnoradas | Erros: $totalErros',
+              'Finalizado. Encontradas: $totalEncontradas | Enviadas: $totalEnviadas | Ignoradas: $totalIgnoradas | Erros: $totalErros',
             ),
             backgroundColor: totalErros == 0 ? Colors.green : Colors.orange,
           ),
@@ -270,9 +304,21 @@ class _MenuPageState extends State<MenuPage> {
         child: Column(
           children: [
             _itemMenu(
+              icon: Icons.person,
+              titulo: 'Meu Perfil',
+              subtitulo: 'Ver dados do motorista logado',
+              iconColor: Colors.deepPurple,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PerfilPage()),
+                );
+              },
+            ),
+            _itemMenu(
               icon: Icons.list_alt,
               titulo: 'Entregas',
-              subtitulo: 'Ver pacotes entregues e pendentes',
+              subtitulo: 'Ver pacotes entregues',
               onTap: () => _abrirEntregas(context),
             ),
             _itemMenu(
@@ -291,7 +337,7 @@ class _MenuPageState extends State<MenuPage> {
               titulo: 'Sincronizar fotos',
               subtitulo: sincronizando
                   ? progresso
-                  : 'Enviar fotos pendentes para o servidor do PC',
+                  : 'Enviar minhas fotos pendentes para o Google Drive',
               iconColor: Colors.green,
               onTap: sincronizando ? null : _sincronizarFotosManual,
             ),
