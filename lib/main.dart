@@ -10,7 +10,9 @@ import 'menu_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/atualizacao_service.dart';
 import 'services/atualizacao_dialog.dart';
+import 'services/sincronizacao_fotos_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'app_theme.dart';
 import 'login_page.dart';
 
 List<Pacote> listaPacotes = [];
@@ -18,15 +20,13 @@ List<Pacote> listaPacotes = [];
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
-  MyApp({super.key});
+  const MyApp({super.key});
 
   static final ValueNotifier<bool> darkMode = ValueNotifier(false);
 
@@ -65,16 +65,10 @@ class _MyAppState extends State<MyApp> {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          supportedLocales: const [
-            Locale('pt', 'BR'),
-            Locale('en', 'US'),
-          ],
+          supportedLocales: const [Locale('pt', 'BR'), Locale('en', 'US')],
           locale: const Locale('pt', 'BR'),
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-            useMaterial3: true,
-          ),
-          darkTheme: ThemeData.dark(useMaterial3: true),
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
           themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
           home: const AuthCheckPage(),
         );
@@ -82,23 +76,23 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-    class AuthCheckPage extends StatelessWidget {
-      const AuthCheckPage({super.key});
 
-      @override
-      Widget build(BuildContext context) {
-        final usuario = FirebaseAuth.instance.currentUser;
+class AuthCheckPage extends StatelessWidget {
+  const AuthCheckPage({super.key});
 
-        if (usuario != null) {
-          return const HomePage();
-        }
+  @override
+  Widget build(BuildContext context) {
+    final usuario = FirebaseAuth.instance.currentUser;
 
-        return const LoginPage();
-      }
+    if (usuario != null) {
+      return const HomePage();
     }
 
+    return const LoginPage();
+  }
+}
+
 class HomePage extends StatefulWidget {
-  
   const HomePage({super.key});
 
   @override
@@ -108,7 +102,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   double valorPacote = 3.0;
   bool carregando = true;
-    String _iniciais(String nome) {
+  String _iniciais(String nome) {
     final partes = nome.trim().split(' ').where((e) => e.isNotEmpty).toList();
 
     if (partes.isEmpty) return 'U';
@@ -136,23 +130,24 @@ class _HomePageState extends State<HomePage> {
         final nome = dados['nome'] ?? '';
         final valor = dados['valorPacote'];
 
-          if (valor is int) {
-            valorPacote = valor.toDouble();
-          } else if (valor is double) {
-            valorPacote = valor;
-          }
-        final cargo =
-            dados['admin'] == true ? 'Administrador' : 'Motorista';
+        if (valor is int) {
+          valorPacote = valor.toDouble();
+        } else if (valor is double) {
+          valorPacote = valor;
+        }
+        final cargo = dados['admin'] == true ? 'Administrador' : 'Motorista';
+        final colors = Theme.of(context).colorScheme;
 
         return Row(
           children: [
             CircleAvatar(
               radius: 24,
-              backgroundColor: Colors.blue,
+              backgroundColor: colors.primaryContainer,
+              foregroundColor: colors.onPrimaryContainer,
               child: Text(
                 _iniciais(nome),
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: colors.onPrimaryContainer,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -165,8 +160,8 @@ class _HomePageState extends State<HomePage> {
               children: [
                 Text(
                   cargo,
-                  style: const TextStyle(
-                    color: Colors.grey,
+                  style: TextStyle(
+                    color: colors.onSurfaceVariant,
                     fontSize: 12,
                   ),
                 ),
@@ -186,18 +181,30 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-    @override
-    void initState() {
-      super.initState();
+  @override
+  void initState() {
+    super.initState();
 
-      _carregarEntregasFirebase();
+    _carregarEntregasFirebase();
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _verificarAtualizacao();
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _verificarAtualizacao();
+      _sincronizarFotosEmSegundoPlano();
+    });
+  }
 
-      Future<void> _verificarAtualizacao() async {
+  // Roda em segundo plano, sem diálogo nem snackbar: envia fotos de
+  // entregas feitas offline assim que o motorista abre o app e tem
+  // internet, sem precisar entrar no Menu e apertar "Sincronizar".
+  Future<void> _sincronizarFotosEmSegundoPlano() async {
+    final resultado = await SincronizacaoFotosService.instance.sincronizar();
+
+    if (!mounted || resultado == null || resultado.totalEnviadas == 0) return;
+
+    await _carregarEntregasFirebase();
+  }
+
+  Future<void> _verificarAtualizacao() async {
     await Future.delayed(const Duration(seconds: 2));
 
     if (!mounted) return;
@@ -209,7 +216,6 @@ class _HomePageState extends State<HomePage> {
 
     await AtualizacaoDialog.mostrar(context, info);
   }
-
 
   Future<void> _carregarEntregasFirebase() async {
     try {
@@ -259,20 +265,16 @@ class _HomePageState extends State<HomePage> {
         carregando = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao carregar entregas: $e'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erro ao carregar entregas: $e')));
     }
   }
 
   Future<void> _abrirScanner() async {
     final codigo = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const ScannerPage(),
-      ),
+      MaterialPageRoute(builder: (_) => const ScannerPage()),
     );
 
     if (codigo != null && mounted) {
@@ -292,18 +294,14 @@ class _HomePageState extends State<HomePage> {
   void _abrirEntregas() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const EntregasPage(),
-      ),
+      MaterialPageRoute(builder: (_) => const EntregasPage()),
     );
   }
 
   void _abrirMenu() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const MenuPage(),
-      ),
+      MaterialPageRoute(builder: (_) => const MenuPage()),
     );
   }
 
@@ -311,101 +309,148 @@ class _HomePageState extends State<HomePage> {
     return a.day == b.day && a.month == b.month && a.year == b.year;
   }
 
-      Widget _resumoDoDia({
-      required int entregasHoje,
-      required double ganhoHoje,
-      required int fotosPendentes,
-    }) {
-      const int metaDia = 80;
-      final progresso = entregasHoje / metaDia;
-      final porcentagem = (progresso * 100).clamp(0, 100).toInt();
-      final faltam = (metaDia - entregasHoje).clamp(0, metaDia);
-
-      return Card(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF1E293B)
-            : Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
+  Widget _cardEstatistica({
+    required IconData icon,
+    required String titulo,
+    required String valor,
+    required Color backgroundColor,
+    required Color foregroundColor,
+    VoidCallback? onTap,
+  }) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      color: backgroundColor,
+      child: InkWell(
+        onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(14),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Resumo do dia',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+              Icon(icon, color: foregroundColor),
+              const SizedBox(height: 10),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  valor,
+                  style: TextStyle(
+                    color: foregroundColor,
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-
-              const SizedBox(height: 16),
-
-              Row(
-                children: [
-                  const Icon(Icons.inventory_2, color: Colors.blue),
-                  const SizedBox(width: 10),
-                  Text('$entregasHoje entregas'),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              Row(
-                children: [
-                  const Icon(Icons.attach_money, color: Colors.green),
-                  const SizedBox(width: 10),
-                  Text('R\$ ${ganhoHoje.toStringAsFixed(2).replaceAll('.', ',')}'),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              Row(
-                children: [
-                  const Icon(Icons.cloud_upload, color: Colors.orange),
-                  const SizedBox(width: 10),
-                  Text('Fotos pendentes: $fotosPendentes'),
-                ],
-              ),
-
-              const SizedBox(height: 18),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Meta: $entregasHoje/$metaDia'),
-                  Text('$porcentagem%'),
-                ],
-              ),
-
-              const SizedBox(height: 8),
-
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: LinearProgressIndicator(
-                  value: progresso.clamp(0, 1),
-                  minHeight: 12,
-                  backgroundColor: Colors.grey.shade300,
-                  color: Colors.blue,
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
+              const SizedBox(height: 4),
               Text(
-                faltam == 0
-                    ? '🎉 Meta concluída!'
-                    : 'Faltam $faltam entregas para bater a meta',
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                titulo,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: foregroundColor),
               ),
             ],
           ),
         ),
-      );
-    }
+      ),
+    );
+  }
+
+  Widget _linhaResumo({
+    required IconData icon,
+    required String texto,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: 10),
+          Expanded(child: Text(texto)),
+        ],
+      ),
+    );
+  }
+
+  Widget _resumoDoDia({
+    required int entregasHoje,
+    required double ganhoHoje,
+    required int fotosPendentes,
+  }) {
+    const int metaDia = 80;
+    final colors = Theme.of(context).colorScheme;
+    final progresso = entregasHoje / metaDia;
+    final progressoLimitado = progresso.clamp(0.0, 1.0).toDouble();
+    final porcentagem = (progresso * 100).clamp(0, 100).toInt();
+    final faltam = (metaDia - entregasHoje).clamp(0, metaDia);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Resumo do dia',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+
+            const SizedBox(height: 16),
+
+            _linhaResumo(
+              icon: Icons.inventory_2_outlined,
+              texto: '$entregasHoje entregas',
+              color: colors.primary,
+            ),
+
+            const SizedBox(height: 10),
+
+            _linhaResumo(
+              icon: Icons.payments_outlined,
+              texto:
+                  'R\$ ${ganhoHoje.toStringAsFixed(2).replaceAll('.', ',')}',
+              color: colors.tertiary,
+            ),
+
+            const SizedBox(height: 10),
+
+            _linhaResumo(
+              icon: Icons.cloud_upload_outlined,
+              texto: 'Fotos pendentes: $fotosPendentes',
+              color: colors.secondary,
+            ),
+
+            const SizedBox(height: 18),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Meta: $entregasHoje/$metaDia'),
+                Text('$porcentagem%'),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            LinearProgressIndicator(
+              value: progressoLimitado,
+              minHeight: 12,
+              borderRadius: BorderRadius.circular(20),
+            ),
+
+            const SizedBox(height: 10),
+
+            Text(
+              faltam == 0
+                  ? 'Meta concluída!'
+                  : 'Faltam $faltam entregas para bater a meta',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -418,11 +463,15 @@ class _HomePageState extends State<HomePage> {
     final totalBaixas = listaPacotes.where((p) => p.entregue).length;
     final ganhoHoje = entregasHoje * valorPacote;
 
-    final ultimasEntregas =
-        listaPacotes.where((p) => p.entregue).take(5).toList();
+    final ultimasEntregas = listaPacotes
+        .where((p) => p.entregue)
+        .take(5)
+        .toList();
 
     final fotosPendentes = listaPacotes.where((p) {
-      return p.entregue && p.fotoUrl == null;}).length;
+      return p.entregue && p.fotoUrl == null;
+    }).length;
+    final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
       body: carregando
@@ -436,95 +485,40 @@ class _HomePageState extends State<HomePage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 20),
-                    
+
                     _topoUsuario(),
 
-                    const SizedBox(height: 25,),
+                    const SizedBox(height: 25),
 
                     Row(
                       children: [
                         Expanded(
-                          child: Card(
-                            color: Theme.of(context).brightness ==
-                                    Brightness.dark
-                                ? const Color(0xFF1E293B)
-                                : Colors.blue.shade50,
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    '$totalBaixas',
-                                    style: const TextStyle(
-                                      fontSize: 30,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const Text(
-                                    'Total\nBaixas',
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                              ),
-                            ),
+                          child: _cardEstatistica(
+                            icon: Icons.done_all_outlined,
+                            titulo: 'Total\nBaixas',
+                            valor: '$totalBaixas',
+                            backgroundColor: colors.primaryContainer,
+                            foregroundColor: colors.onPrimaryContainer,
                           ),
                         ),
-
                         Expanded(
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(12),
+                          child: _cardEstatistica(
+                            icon: Icons.inventory_2_outlined,
+                            titulo: 'Entregas\nHoje',
+                            valor: '$entregasHoje',
+                            backgroundColor: colors.secondaryContainer,
+                            foregroundColor: colors.onSecondaryContainer,
                             onTap: _abrirEntregas,
-                            child: Card(
-                              color: Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? const Color(0xFF1E293B)
-                                  : Colors.green.shade50,
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      '$entregasHoje',
-                                      style: const TextStyle(
-                                        fontSize: 30,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const Text(
-                                      'Entregas\nHoje',
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
                           ),
                         ),
-
                         Expanded(
-                          child: Card(
-                            color: Theme.of(context).brightness ==
-                                    Brightness.dark
-                                ? const Color(0xFF1E293B)
-                                : Colors.orange.shade50,
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    'R\$ ${ganhoHoje.toStringAsFixed(2).replaceAll('.', ',')}',
-                                    style: const TextStyle(
-                                      fontSize: 26,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const Text(
-                                    'Ganho\nHoje',
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                              ),
-                            ),
+                          child: _cardEstatistica(
+                            icon: Icons.payments_outlined,
+                            titulo: 'Ganho\nHoje',
+                            valor:
+                                'R\$ ${ganhoHoje.toStringAsFixed(2).replaceAll('.', ',')}',
+                            backgroundColor: colors.tertiaryContainer,
+                            foregroundColor: colors.onTertiaryContainer,
                           ),
                         ),
                       ],
@@ -532,26 +526,18 @@ class _HomePageState extends State<HomePage> {
 
                     const SizedBox(height: 20),
 
-                    const Text(
+                    Text(
                       "Últimas Entregas",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
 
                     const SizedBox(height: 8),
 
                     Card(
-                      child: Container(
+                      child: Padding(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color:
-                              Theme.of(context).brightness == Brightness.dark
-                                  ? const Color(0xFF1E293B)
-                                  : Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: ultimasEntregas.isEmpty
@@ -559,7 +545,7 @@ class _HomePageState extends State<HomePage> {
                                   const Padding(
                                     padding: EdgeInsets.all(12),
                                     child: Text("Nenhuma baixa registrada"),
-                                  )
+                                  ),
                                 ]
                               : ultimasEntregas.map((pacote) {
                                   return ListTile(
@@ -570,9 +556,9 @@ class _HomePageState extends State<HomePage> {
                                       pacote.transportadora ??
                                           "Sem transportadora",
                                     ),
-                                    trailing: const Icon(
+                                    trailing: Icon(
                                       Icons.check_circle,
-                                      color: Colors.green,
+                                      color: colors.primary,
                                     ),
                                   );
                                 }).toList(),
@@ -582,57 +568,41 @@ class _HomePageState extends State<HomePage> {
 
                     const SizedBox(height: 20),
 
-                      _resumoDoDia(
-                        entregasHoje: entregasHoje,
-                        ganhoHoje: ganhoHoje,
-                        fotosPendentes: fotosPendentes,
-                      ),
+                    _resumoDoDia(
+                      entregasHoje: entregasHoje,
+                      ganhoHoje: ganhoHoje,
+                      fotosPendentes: fotosPendentes,
+                    ),
 
-                      const SizedBox(height: 20),
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
             ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: _abrirScanner,
-        backgroundColor: Colors.blue,
-        elevation: 8,
-        child: const Icon(
-          Icons.qr_code_scanner,
-          color: Colors.white,
-          size: 32,
-        ),
+        icon: const Icon(Icons.qr_code_scanner),
+        label: const Text('Escanear'),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8,
-        child: SizedBox(
-          height: 50,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.home),
-                  Text("Início"),
-                ],
-              ),
-              const SizedBox(width: 50),
-              InkWell(
-                onTap: _abrirMenu,
-                child: const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.menu),
-                    Text("Menu"),
-                  ],
-                ),
-              ),
-            ],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: 0,
+        onDestinationSelected: (index) {
+          if (index == 1) {
+            _abrirMenu();
+          }
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Início',
           ),
-        ),
+          NavigationDestination(
+            icon: Icon(Icons.menu_outlined),
+            selectedIcon: Icon(Icons.menu),
+            label: 'Menu',
+          ),
+        ],
       ),
     );
   }

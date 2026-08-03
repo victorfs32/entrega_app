@@ -4,9 +4,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 
+import 'camera_entrega_page.dart';
 import 'main.dart';
 import 'model/pacote.dart';
 
@@ -26,7 +26,6 @@ class RegistrarEntregaPage extends StatefulWidget {
 
 class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
   final TextEditingController nomeController = TextEditingController();
-  final ImagePicker picker = ImagePicker();
 
   File? foto;
   double? lat;
@@ -71,8 +70,10 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 3),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 3),
+        ),
       );
 
       if (!mounted) return;
@@ -89,9 +90,9 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
   }
 
   Future<void> _tirarFoto() async {
-    final picked = await picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 70,
+    final picked = await Navigator.push<File>(
+      context,
+      MaterialPageRoute(builder: (_) => const CameraEntregaPage()),
     );
 
     if (picked == null) return;
@@ -106,9 +107,7 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
     final nomeArquivo =
         '${widget.codigo}_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-    final novaFoto = await File(picked.path).copy(
-      '${fotosDir.path}/$nomeArquivo',
-    );
+    final novaFoto = await picked.copy('${fotosDir.path}/$nomeArquivo');
 
     setState(() {
       foto = novaFoto;
@@ -210,9 +209,7 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
         });
       }
 
-      final index = listaPacotes.indexWhere(
-        (p) => p.codigo == widget.codigo,
-      );
+      final index = listaPacotes.indexWhere((p) => p.codigo == widget.codigo);
 
       final pacoteAtualizado = Pacote(
         codigo: widget.codigo,
@@ -258,9 +255,7 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
         !salvando && nomeController.text.trim().isNotEmpty && foto != null;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Registrar Entrega"),
-      ),
+      appBar: AppBar(title: const Text("Registrar Entrega")),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -290,7 +285,7 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
             SizedBox(
               width: double.infinity,
               height: 50,
-              child: ElevatedButton.icon(
+              child: FilledButton.icon(
                 onPressed: salvando ? null : _tirarFoto,
                 icon: const Icon(Icons.camera_alt),
                 label: Text(
@@ -309,6 +304,8 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
                   height: 180,
                   width: double.infinity,
                   fit: BoxFit.cover,
+                  cacheHeight:
+                      (180 * MediaQuery.devicePixelRatioOf(context)).round(),
                 ),
               ),
 
@@ -326,8 +323,8 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
                     gpsOk
                         ? "GPS OK: $lat, $lng"
                         : pegandoGps
-                            ? "Pegando GPS..."
-                            : "GPS não disponível, mas pode salvar.",
+                        ? "Pegando GPS..."
+                        : "GPS não disponível, mas pode salvar.",
                     style: const TextStyle(fontSize: 13),
                   ),
                 ),
@@ -354,7 +351,7 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
             SizedBox(
               width: double.infinity,
               height: 52,
-              child: ElevatedButton.icon(
+              child: FilledButton.icon(
                 onPressed: podeSalvar ? _salvarEntrega : null,
                 icon: salvando
                     ? const SizedBox.shrink()
@@ -369,8 +366,8 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
                         nomeController.text.trim().isEmpty
                             ? "Informe o recebedor"
                             : foto == null
-                                ? "Tire a foto da entrega"
-                                : "Confirmar Entrega",
+                            ? "Tire a foto da entrega"
+                            : "Confirmar Entrega",
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
               ),

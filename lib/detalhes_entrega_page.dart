@@ -112,6 +112,12 @@ class DetalhesEntregaPage extends StatelessWidget {
   }
 
   Widget _fotoEntrega(BuildContext context) {
+    // Decodifica a imagem já no tamanho de exibição (260dp de altura) em vez
+    // do tamanho original da foto. Sem isso, uma foto de 12MP tirada pela
+    // câmera é decodificada inteira na memória só pra mostrar essa miniatura
+    // — em celulares com pouca RAM isso causa travamentos e até crash.
+    final cacheHeight = (260 * MediaQuery.devicePixelRatioOf(context)).round();
+
     if (_temFotoUrl) {
       return GestureDetector(
         onTap: () {
@@ -131,6 +137,7 @@ class DetalhesEntregaPage extends StatelessWidget {
             height: 260,
             width: double.infinity,
             fit: BoxFit.cover,
+            cacheHeight: cacheHeight,
             errorBuilder: (context, error, stackTrace) {
               return const Card(
                 child: Padding(
@@ -165,6 +172,7 @@ class DetalhesEntregaPage extends StatelessWidget {
             height: 260,
             width: double.infinity,
             fit: BoxFit.cover,
+            cacheHeight: cacheHeight,
           ),
         ),
       );
@@ -229,7 +237,7 @@ class DetalhesEntregaPage extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: _statusColor.withOpacity(0.12),
+                color: _statusColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: _statusColor),
               ),

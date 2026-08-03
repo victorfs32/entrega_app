@@ -49,27 +49,22 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: dark ? const Color(0xFF0F172A) : Colors.grey.shade100,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Card(
-            elevation: 8,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(22),
-            ),
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.local_shipping,
                     size: 64,
-                    color: Colors.blue,
+                    color: colors.primary,
                   ),
                   const SizedBox(height: 16),
                   const Text(
@@ -118,7 +113,7 @@ class _LoginPageState extends State<LoginPage> {
                   SizedBox(
                     width: double.infinity,
                     height: 52,
-                    child: ElevatedButton(
+                    child: FilledButton(
                       onPressed: carregando ? null : entrar,
                       child: Text(
                         carregando ? 'Entrando...' : 'Entrar',

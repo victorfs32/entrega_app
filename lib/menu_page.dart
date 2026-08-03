@@ -1,15 +1,11 @@
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
 import 'entregas_page.dart';
 import 'relatorios_page.dart';
 import 'configuracoes_page.dart';
 import 'perfil_page.dart';
+import 'entrega_em_massa_page.dart';
+import 'services/sincronizacao_fotos_service.dart';
 
 class MenuPage extends StatefulWidget {
   const MenuPage({super.key});
@@ -19,24 +15,11 @@ class MenuPage extends StatefulWidget {
 }
 
 class _MenuPageState extends State<MenuPage> {
-  final String servidorFotos = "https://servidor-fotos-entregas.vercel.app";
-
   bool sincronizando = false;
   int totalEncontradas = 0;
   int totalEnviadas = 0;
   int totalIgnoradas = 0;
   int totalErros = 0;
-
-  @override
-  void initState() {
-    super.initState();
-
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        _sincronizarFotosAutomatico();
-      }
-    });
-  }
 
   void _abrirEntregas(BuildContext context) {
     Navigator.push(
@@ -45,57 +28,16 @@ class _MenuPageState extends State<MenuPage> {
     );
   }
 
-  Future<Map<String, dynamic>> _enviarFotoParaServidor({
-    required String codigo,
-    required String fotoPath,
-    required String motoristaId,
-  }) async {
-    final arquivo = File(fotoPath);
-
-    if (!await arquivo.exists()) {
-      throw Exception('Arquivo não encontrado no celular');
-    }
-
-    final url = Uri.parse('$servidorFotos/upload');
-
-    final request = http.MultipartRequest('POST', url);
-    request.fields['codigo'] = codigo;
-    request.fields['motoristaId'] = motoristaId;
-
-    request.files.add(
-      await http.MultipartFile.fromPath(
-        'foto',
-        arquivo.path,
-      ),
-    );
-
-    final response = await request.send().timeout(
-          const Duration(seconds: 60),
-        );
-
-    final responseBody = await response.stream.bytesToString();
-
-    print("Status: ${response.statusCode}");
-    print("Resposta: $responseBody");
-
-    if (response.statusCode != 200) {
-      throw Exception('Servidor respondeu erro: $responseBody');
-    }
-
-    final decoded = jsonDecode(responseBody);
-
-    if (decoded['fotoUrl'] == null) {
-      throw Exception('Servidor não retornou fotoUrl');
-    }
-
-    return decoded;
-  }
-
-  Future<void> _sincronizarFotosAutomatico() async {
-    await _executarSincronizacao(mostrarMensagemFinal: false);
-  }
-
   Future<void> _sincronizarFotosManual() async {
+    if (SincronizacaoFotosService.instance.emExecucao) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Já existe uma sincronização em andamento.'),
+        ),
+      );
+      return;
+    }
+
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -128,20 +70,6 @@ class _MenuPageState extends State<MenuPage> {
   }) async {
     if (sincronizando) return;
 
-    final usuario = FirebaseAuth.instance.currentUser;
-
-    if (usuario == null) {
-      if (mostrarMensagemFinal && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Usuário não logado. Faça login novamente.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return;
-    }
-
     setState(() {
       sincronizando = true;
       totalEncontradas = 0;
@@ -150,115 +78,51 @@ class _MenuPageState extends State<MenuPage> {
       totalErros = 0;
     });
 
-    try {
-      final uid = usuario.uid;
+    final resultado = await SincronizacaoFotosService.instance.sincronizar(
+      onInicio: (encontradas, ignoradas) {
+        if (!mounted) return;
+        setState(() {
+          totalEncontradas = encontradas;
+          totalIgnoradas = ignoradas;
+        });
+      },
+      onProgresso: (enviadas, erros) {
+        if (!mounted) return;
+        setState(() {
+          totalEnviadas = enviadas;
+          totalErros = erros;
+        });
+      },
+    );
 
-      final snapshot = await FirebaseFirestore.instance
-          .collection('entregas')
-          .where('motoristaId', isEqualTo: uid)
-          .get();
+    if (!mounted) return;
 
-      if (!mounted) return;
+    setState(() {
+      sincronizando = false;
+    });
 
-      setState(() {
-        totalEncontradas = snapshot.docs.length;
-      });
+    if (!mostrarMensagemFinal) return;
 
-      for (final doc in snapshot.docs) {
-        final dados = doc.data();
-
-        final codigo = (dados['codigo'] ?? '').toString().trim();
-        final fotoPath = (dados['fotoPath'] ?? '').toString().trim();
-        final fotoUrl = (dados['fotoUrl'] ?? '').toString().trim();
-
-        print('DOC: ${doc.id}');
-        print('motoristaId: ${dados['motoristaId']}');
-        print('codigo: $codigo');
-        print('fotoPath: $fotoPath');
-        print('fotoUrl: $fotoUrl');
-
-        if (codigo.isEmpty || fotoPath.isEmpty) {
-          if (!mounted) return;
-          setState(() => totalIgnoradas++);
-          continue;
-        }
-
-        if (fotoUrl.isNotEmpty && fotoUrl != 'null') {
-          if (!mounted) return;
-          setState(() => totalIgnoradas++);
-          continue;
-        }
-
-        print('VAI ENVIAR FOTO: $codigo');
-
-        try {
-          final resultadoUpload = await _enviarFotoParaServidor(
-            codigo: codigo,
-            fotoPath: fotoPath,
-            motoristaId: uid,
-          );
-
-          await FirebaseFirestore.instance
-              .collection('entregas')
-              .doc(doc.id)
-              .update({
-            'fotoUrl': resultadoUpload['fotoUrl'],
-            'fotoServerPath': resultadoUpload['fileId'],
-            'fotoViewUrl': resultadoUpload['fotoViewUrl'],
-            'fotoDownloadUrl': resultadoUpload['fotoDownloadUrl'],
-            'fotoSincronizada': true,
-            'dataSincronizacaoFoto': Timestamp.now(),
-            'erroSincronizacaoFoto': FieldValue.delete(),
-          });
-
-          if (!mounted) return;
-          setState(() => totalEnviadas++);
-        } catch (e) {
-          print('ERRO AO ENVIAR FOTO $codigo: $e');
-
-          await FirebaseFirestore.instance
-              .collection('entregas')
-              .doc(doc.id)
-              .update({
-            'fotoSincronizada': false,
-            'erroSincronizacaoFoto': e.toString(),
-          }).catchError((_) {});
-
-          if (!mounted) return;
-          setState(() => totalErros++);
-        }
-      }
-
-      if (!mounted) return;
-
-      if (mostrarMensagemFinal) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Finalizado. Encontradas: $totalEncontradas | Enviadas: $totalEnviadas | Ignoradas: $totalIgnoradas | Erros: $totalErros',
-            ),
-            backgroundColor: totalErros == 0 ? Colors.green : Colors.orange,
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-
-      if (mostrarMensagemFinal) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao buscar entregas no Firebase: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (!mounted) return;
-
-      setState(() {
-        sincronizando = false;
-      });
+    if (resultado == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível sincronizar agora. Tente novamente.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
     }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          resultado.totalEncontradas == 0
+              ? 'Nenhuma foto pendente para sincronizar.'
+              : 'Finalizado. Pendentes: ${resultado.totalEncontradas} | Enviadas: ${resultado.totalEnviadas} | Já sincronizadas: ${resultado.totalIgnoradas} | Erros: ${resultado.totalErros}',
+        ),
+        backgroundColor: resultado.totalErros == 0 ? Colors.green : Colors.orange,
+      ),
+    );
   }
 
   Widget _itemMenu({
@@ -291,14 +155,11 @@ class _MenuPageState extends State<MenuPage> {
   @override
   Widget build(BuildContext context) {
     final progresso = totalEncontradas == 0
-        ? 'Preparando sincronização...'
-        : 'Encontradas: $totalEncontradas | Enviadas: $totalEnviadas | Ignoradas: $totalIgnoradas | Erros: $totalErros';
+        ? 'Procurando fotos pendentes...'
+        : 'Pendentes: $totalEncontradas | Enviadas: $totalEnviadas | Já sincronizadas: $totalIgnoradas | Erros: $totalErros';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Menu'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Menu'), centerTitle: true),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -320,6 +181,29 @@ class _MenuPageState extends State<MenuPage> {
               titulo: 'Entregas',
               subtitulo: 'Ver pacotes entregues',
               onTap: () => _abrirEntregas(context),
+            ),
+            _itemMenu(
+              icon: Icons.dynamic_feed,
+              titulo: 'Entrega em massa',
+              subtitulo: 'Bipar vários pacotes seguidos, com foto de cada um',
+              iconColor: Colors.teal,
+              onTap: () async {
+                final quantidade = await Navigator.push<int>(
+                  context,
+                  MaterialPageRoute(builder: (_) => const EntregaEmMassaPage()),
+                );
+
+                if (!context.mounted) return;
+
+                if (quantidade != null && quantidade > 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('$quantidade pacote(s) registrados no lote.'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              },
             ),
             _itemMenu(
               icon: Icons.bar_chart,
