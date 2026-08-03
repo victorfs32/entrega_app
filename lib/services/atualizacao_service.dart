@@ -24,12 +24,10 @@ class AtualizacaoInfo {
 }
 
 class AtualizacaoService {
-  static const String owner = 'victorfs32';
-  static const String repo = 'entrega_app';
-  static const String apkName = 'app-release.apk';
+  static const String apkName = 'entrega_app.apk';
 
-  static const String latestReleaseUrl =
-      'https://api.github.com/repos/$owner/$repo/releases/latest';
+  static const String versaoUrl =
+      'https://servidor-fotos-entregas.vercel.app/versao';
 
   final Dio _dio = Dio();
 
@@ -38,7 +36,7 @@ class AtualizacaoService {
       final packageInfo = await PackageInfo.fromPlatform();
       final versaoAtual = packageInfo.version;
 
-      final response = await _dio.get(latestReleaseUrl);
+      final response = await _dio.get(versaoUrl);
 
       if (response.statusCode != 200) {
         return null;
@@ -48,22 +46,9 @@ class AtualizacaoService {
           ? jsonDecode(response.data)
           : response.data as Map<String, dynamic>;
 
-      final tagName = (data['tag_name'] ?? '').toString();
-      final novaVersao = tagName.replaceAll('v', '').trim();
-      final notas = (data['body'] ?? 'Nova versão disponível.').toString();
-
-      String apkUrl = '';
-
-      final assets = data['assets'] as List<dynamic>? ?? [];
-
-      for (final asset in assets) {
-        final name = (asset['name'] ?? '').toString();
-
-        if (name == apkName) {
-          apkUrl = (asset['browser_download_url'] ?? '').toString();
-          break;
-        }
-      }
+      final novaVersao = (data['versao'] ?? '').toString().trim();
+      final notas = (data['notas'] ?? 'Nova versão disponível.').toString();
+      final apkUrl = (data['apkUrl'] ?? '').toString();
 
       if (novaVersao.isEmpty || apkUrl.isEmpty) {
         return null;
