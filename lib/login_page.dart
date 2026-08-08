@@ -1,9 +1,12 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'main.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  final String? mensagemInicial;
+
+  const LoginPage({super.key, this.mensagemInicial});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -16,6 +19,12 @@ class _LoginPageState extends State<LoginPage> {
   bool carregando = false;
   String erro = '';
 
+  @override
+  void initState() {
+    super.initState();
+    erro = widget.mensagemInicial ?? '';
+  }
+
   Future<void> entrar() async {
     setState(() {
       carregando = true;
@@ -23,10 +32,27 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final credencial = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: emailController.text.trim(),
         password: senhaController.text.trim(),
       );
+
+      final motoristaDoc = await FirebaseFirestore.instance
+          .collection('motoristas')
+          .doc(credencial.user!.uid)
+          .get();
+
+      if (motoristaDoc.data()?['ativo'] == false) {
+        await FirebaseAuth.instance.signOut();
+
+        if (!mounted) return;
+
+        setState(() {
+          erro = 'Sua conta está bloqueada. Fale com o administrador.';
+        });
+
+        return;
+      }
 
       if (!mounted) return;
 

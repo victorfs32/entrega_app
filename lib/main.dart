@@ -77,18 +77,64 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-class AuthCheckPage extends StatelessWidget {
+class AuthCheckPage extends StatefulWidget {
   const AuthCheckPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  State<AuthCheckPage> createState() => _AuthCheckPageState();
+}
+
+class _AuthCheckPageState extends State<AuthCheckPage> {
+  late final Future<bool> _verificacao = _verificarAcesso();
+  String? _mensagemBloqueio;
+
+  // Uma sessão já aberta antes do motorista ser bloqueado por um admin
+  // continua válida no Firebase Auth — sem essa checagem, ele reabriria o
+  // app direto na Home e só veria telas vazias (as regras do Firestore
+  // negam a leitura, mas isso sozinho não é uma boa experiência).
+  Future<bool> _verificarAcesso() async {
     final usuario = FirebaseAuth.instance.currentUser;
+    if (usuario == null) return false;
 
-    if (usuario != null) {
-      return const HomePage();
+    try {
+      final motoristaDoc = await FirebaseFirestore.instance
+          .collection('motoristas')
+          .doc(usuario.uid)
+          .get();
+
+      if (motoristaDoc.data()?['ativo'] == false) {
+        _mensagemBloqueio = 'Sua conta está bloqueada. Fale com o administrador.';
+        await FirebaseAuth.instance.signOut();
+        return false;
+      }
+
+      return true;
+    } catch (_) {
+      // Sem conseguir confirmar o status por um problema de rede, não
+      // bloqueia o motorista aqui — as regras do Firestore continuam
+      // protegendo os dados de qualquer forma.
+      return true;
     }
+  }
 
-    return const LoginPage();
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: _verificacao,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.data == true) {
+          return const HomePage();
+        }
+
+        return LoginPage(mensagemInicial: _mensagemBloqueio);
+      },
+    );
   }
 }
 
