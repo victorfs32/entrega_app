@@ -170,9 +170,14 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
 
       final motorista = motoristaDoc.data();
 
+      // Filtra também por motoristaId: sem isso, a busca tenta enxergar
+      // entregas de qualquer dono, e a regra do Firestore recusa a
+      // consulta inteira pra quem não é admin (ela não consegue provar
+      // que só voltariam documentos que esse motorista pode ler).
       final consulta = await FirebaseFirestore.instance
           .collection('entregas')
           .where('codigo', isEqualTo: widget.codigo)
+          .where('motoristaId', isEqualTo: usuario.uid)
           .limit(1)
           .get();
 

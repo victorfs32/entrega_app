@@ -1,60 +1,52 @@
 rules_version = '2';
 
-// ATENÇÃO: revertido de volta pra regra aberta em 2026-08-07. A versão
-// restritiva abaixo (comentada) foi testada e confirmada correta no
-// Rules Playground do Firebase (mesmo UID, mesma regra = "Allow"), mas
-// negava a leitura de verdade em produção mesmo assim — causa não
-// confirmada (suspeita: restrição de API key no Google Cloud, ou algo
-// na propagação da regra publicada). Antes de tentar de novo, checar
-// Google Cloud Console > APIs & Services > Credentials > a API key do
-// projeto > "Restrições de API", e confirmar que "Cloud Firestore API"
-// está liberada.
-//
-// function motorista() {
-//   return get(/databases/$(database)/documents/motoristas/$(request.auth.uid)).data;
-// }
-//
-// function autenticado() {
-//   return request.auth != null;
-// }
-//
-// function admin() {
-//   return autenticado() && motorista().admin == true;
-// }
-//
-// function ativo() {
-//   return autenticado() && motorista().ativo == true;
-// }
-//
-// match /motoristas/{uid} {
-//   allow read: if autenticado() && (request.auth.uid == uid || admin());
-//   allow write: if admin();
-// }
-//
-// match /entregas/{id} {
-//   allow read: if admin() || (ativo() && resource.data.motoristaId == request.auth.uid);
-//   allow create: if admin() || (ativo() && request.resource.data.motoristaId == request.auth.uid);
-//   allow update: if admin() || (ativo() && resource.data.motoristaId == request.auth.uid);
-//   allow delete: if admin();
-// }
-//
-// match /configuracoes/{doc} {
-//   allow read, write: if admin();
-// }
+// ATENÇÃO: reativado em 2026-08-08 (tentativa 2). Na primeira tentativa
+// (2026-08-07), essa mesma regra foi confirmada correta no Rules
+// Playground do Firebase (mesmo UID, mesma regra = "Allow"), mas negava
+// a leitura de verdade em produção mesmo assim. Causa nunca confirmada
+// — suspeita principal era restrição de API key no Google Cloud
+// (APIs & Services > Credentials > a API key do projeto > "Restrições
+// de API" > checar se "Cloud Firestore API" está liberada). Se travar
+// de novo, a versão aberta que estava valendo antes fica registrada no
+// histórico do git deste arquivo.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    match /entregas/{entregaId} {
-      allow read, create, update, delete: if request.auth != null;
+    function motorista() {
+      return get(/databases/$(database)/documents/motoristas/$(request.auth.uid)).data;
     }
 
-    match /motoristas/{motoristaId} {
-      allow read, create, update, delete: if request.auth != null;
+    function autenticado() {
+      return request.auth != null;
     }
 
-    match /configuracoes/{documento} {
-      allow read, create, update, delete: if request.auth != null;
+    function admin() {
+      return autenticado() && motorista().admin == true;
+    }
+
+    function ativo() {
+      return autenticado() && motorista().ativo == true;
+    }
+
+    match /motoristas/{uid} {
+      allow read: if autenticado() && (request.auth.uid == uid || admin());
+      allow write: if admin();
+    }
+
+    match /entregas/{id} {
+      allow read: if admin() || (ativo() && resource.data.motoristaId == request.auth.uid);
+      allow create: if admin() || (ativo() && request.resource.data.motoristaId == request.auth.uid);
+      allow update: if admin() || (ativo() && resource.data.motoristaId == request.auth.uid);
+      allow delete: if admin();
+    }
+
+    match /configuracoes/{doc} {
+      allow read, write: if admin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
