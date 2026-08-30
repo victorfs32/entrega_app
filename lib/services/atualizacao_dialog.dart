@@ -107,9 +107,24 @@ class AtualizacaoDialog {
 
                             if (!dialogContext.mounted) return;
 
-                            Navigator.pop(dialogContext);
+                            final resultado = await OpenFilex.open(arquivo.path);
 
-                            await OpenFilex.open(arquivo.path);
+                            if (!dialogContext.mounted) return;
+
+                            if (resultado.type != ResultType.done) {
+                              setState(() {
+                                baixando = false;
+                                erro = resultado.type == ResultType.permissionDenied
+                                    ? "Permissão negada. Vá em Configurações > Apps > "
+                                          "Entrega App > \"Instalar apps desconhecidos\" "
+                                          "e permita, depois toque em Atualizar de novo."
+                                    : "Não foi possível abrir o instalador: "
+                                          "${resultado.message}";
+                              });
+                              return;
+                            }
+
+                            Navigator.pop(dialogContext);
                           } catch (e) {
                             if (!dialogContext.mounted) return;
 
