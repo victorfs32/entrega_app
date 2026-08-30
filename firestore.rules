@@ -41,6 +41,17 @@ service cloud.firestore {
       allow delete: if admin();
     }
 
+    // Ganho x recebido de cada motorista. O próprio motorista registra
+    // quanto recebeu (ex: valor do Pix) — não editável depois, só
+    // apagável (correção é apagar e criar de novo), pra manter o
+    // histórico simples de auditar.
+    match /pagamentos/{id} {
+      allow read: if admin() || (ativo() && resource.data.motoristaId == request.auth.uid);
+      allow create: if admin() || (ativo() && request.resource.data.motoristaId == request.auth.uid);
+      allow update: if false;
+      allow delete: if admin() || (ativo() && resource.data.motoristaId == request.auth.uid);
+    }
+
     // Doc público (leitura por qualquer um, autenticado ou não) porque o
     // app precisa checar o modo de manutenção antes mesmo do login.
     match /configuracoes/app {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'entregas_page.dart';
+import 'financeiro_page.dart';
 import 'relatorios_page.dart';
 import 'configuracoes_page.dart';
 import 'perfil_page.dart';
@@ -213,6 +214,18 @@ class _MenuPageState extends State<MenuPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const RelatoriosPage()),
+                );
+              },
+            ),
+            _itemMenu(
+              icon: Icons.account_balance_wallet,
+              titulo: 'Financeiro',
+              subtitulo: 'Quanto já ganhei, recebi e ainda falta receber',
+              iconColor: Colors.orange,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const FinanceiroPage()),
                 );
               },
             ),
