@@ -14,6 +14,7 @@ import 'services/sincronizacao_fotos_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'app_theme.dart';
 import 'login_page.dart';
+import 'manutencao_page.dart';
 
 List<Pacote> listaPacotes = [];
 
@@ -70,8 +71,41 @@ class _MyAppState extends State<MyApp> {
           theme: AppTheme.light(),
           darkTheme: AppTheme.dark(),
           themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-          home: const AuthCheckPage(),
+          home: const ManutencaoGate(),
         );
+      },
+    );
+  }
+}
+
+// Checa em tempo real (via snapshots, não um get() único) se o app está
+// em modo de manutenção, ANTES até da tela de login — assim dá pra
+// bloquear o acesso de todo mundo direto pelo Firestore, sem precisar
+// gerar e reinstalar um novo APK em cada celular.
+class ManutencaoGate extends StatelessWidget {
+  const ManutencaoGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('configuracoes')
+          .doc('app')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final dados = snapshot.data?.data() as Map<String, dynamic>?;
+
+        if (dados?['manutencao'] == true) {
+          return ManutencaoPage(mensagem: dados?['mensagemManutencao']);
+        }
+
+        return const AuthCheckPage();
       },
     );
   }

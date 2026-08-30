@@ -41,6 +41,13 @@ service cloud.firestore {
       allow delete: if admin();
     }
 
+    // Doc público (leitura por qualquer um, autenticado ou não) porque o
+    // app precisa checar o modo de manutenção antes mesmo do login.
+    match /configuracoes/app {
+      allow read: if true;
+      allow write: if admin();
+    }
+
     match /configuracoes/{doc} {
       allow read, write: if admin();
     }

@@ -1,6 +1,6 @@
-import 'dart:convert';
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -26,29 +26,29 @@ class AtualizacaoInfo {
 class AtualizacaoService {
   static const String apkName = 'entrega_app.apk';
 
-  static const String versaoUrl =
-      'https://servidor-fotos-entregas.vercel.app/versao';
-
   final Dio _dio = Dio();
 
+  // Lê a versão mais recente direto do Firestore (mesmo doc do modo de
+  // manutenção), em vez de um endpoint próprio — o admin publica um APK
+  // novo em qualquer link público (GitHub Releases, Google Drive, etc.)
+  // e cola o link no dashboard, sem precisar de servidor nem OAuth.
   Future<AtualizacaoInfo?> verificarAtualizacao() async {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       final versaoAtual = packageInfo.version;
 
-      final response = await _dio.get(versaoUrl);
+      final doc = await FirebaseFirestore.instance
+          .collection('configuracoes')
+          .doc('app')
+          .get();
 
-      if (response.statusCode != 200) {
-        return null;
-      }
+      final data = doc.data();
+      if (data == null) return null;
 
-      final data = response.data is String
-          ? jsonDecode(response.data)
-          : response.data as Map<String, dynamic>;
-
-      final novaVersao = (data['versao'] ?? '').toString().trim();
-      final notas = (data['notas'] ?? 'Nova versão disponível.').toString();
-      final apkUrl = (data['apkUrl'] ?? '').toString();
+      final novaVersao = (data['ultimaVersao'] ?? '').toString().trim();
+      final notas =
+          (data['notasAtualizacao'] ?? 'Nova versão disponível.').toString();
+      final apkUrl = (data['apkUrl'] ?? '').toString().trim();
 
       if (novaVersao.isEmpty || apkUrl.isEmpty) {
         return null;
