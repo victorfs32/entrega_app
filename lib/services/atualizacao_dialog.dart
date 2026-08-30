@@ -12,6 +12,7 @@ class AtualizacaoDialog {
 
     bool baixando = false;
     double progresso = 0;
+    String? erro;
 
     if (!context.mounted) return;
 
@@ -59,6 +60,12 @@ class AtualizacaoDialog {
                         ),
                       ),
                     ],
+                    if (erro != null) ...[
+                      Text(
+                        erro!,
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -82,6 +89,7 @@ class AtualizacaoDialog {
                       : () async {
                           setState(() {
                             baixando = true;
+                            erro = null;
                           });
 
                           try {
@@ -105,15 +113,10 @@ class AtualizacaoDialog {
                           } catch (e) {
                             if (!dialogContext.mounted) return;
 
-                            Navigator.pop(dialogContext);
-
-                            ScaffoldMessenger.of(dialogContext).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  "Erro ao baixar atualização: $e",
-                                ),
-                              ),
-                            );
+                            setState(() {
+                              baixando = false;
+                              erro = "Erro ao baixar atualização: $e";
+                            });
                           }
                         },
                 ),
