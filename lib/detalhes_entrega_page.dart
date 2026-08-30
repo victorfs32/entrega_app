@@ -37,10 +37,6 @@ class DetalhesEntregaPage extends StatelessWidget {
       return Icons.local_shipping;
     }
 
-    if (_transportadora.toLowerCase().contains('imile')) {
-      return Icons.inventory_2;
-    }
-
     return Icons.delivery_dining;
   }
 

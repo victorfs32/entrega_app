@@ -1,14 +1,13 @@
 /// Reconhecimento e limpeza dos formatos de código de rastreio suportados
-/// (iMile e Anjun, formatos antigo e novo). Compartilhado entre o
-/// escaneamento de um pacote só e o escaneamento em lote.
+/// (Anjun, formatos antigo e novo). Compartilhado entre o escaneamento de
+/// um pacote só e o escaneamento em lote.
+///
+/// iMile foi removida de propósito: o formato antigo dela era só "13
+/// números" (sem nenhum prefixo), um padrão genérico demais que às vezes
+/// casava com leituras erradas/parciais de código de barras da Anjun,
+/// classificando como iMile um pacote que na verdade era da Anjun.
 class CodigoRastreio {
   CodigoRastreio._();
-
-  // iMile antiga: 13 números
-  static final RegExp _imileAntigo = RegExp(r'^\d{13}$');
-
-  // iMile nova: KW + 13 números + BR
-  static final RegExp _imileNovo = RegExp(r'^KW\d{13}BR$');
 
   // Anjun antiga: AJ + 15 números
   static final RegExp _anjunAntigo = RegExp(r'^AJ\d{15}$');
@@ -23,10 +22,7 @@ class CodigoRastreio {
   static bool valido(String codigo) {
     final c = limpar(codigo);
 
-    return _imileAntigo.hasMatch(c) ||
-        _imileNovo.hasMatch(c) ||
-        _anjunAntigo.hasMatch(c) ||
-        _anjunNovo.hasMatch(c);
+    return _anjunAntigo.hasMatch(c) || _anjunNovo.hasMatch(c);
   }
 
   static String transportadora(String codigo) {
@@ -34,10 +30,6 @@ class CodigoRastreio {
 
     if (_anjunAntigo.hasMatch(c) || _anjunNovo.hasMatch(c)) {
       return 'Anjun';
-    }
-
-    if (_imileAntigo.hasMatch(c) || _imileNovo.hasMatch(c)) {
-      return 'iMile';
     }
 
     return 'Desconhecida';
