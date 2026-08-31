@@ -31,7 +31,13 @@ service cloud.firestore {
 
     match /motoristas/{uid} {
       allow read: if autenticado() && (request.auth.uid == uid || admin());
-      allow write: if admin();
+      // O próprio motorista pode atualizar SÓ o campo ultimoAcesso (usado
+      // pra saber quem realmente usa o app) — qualquer outro campo (admin,
+      // ativo, valorPacote...) continua exigindo admin.
+      allow update: if admin() ||
+        (autenticado() && request.auth.uid == uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimoAcesso']));
+      allow create, delete: if admin();
     }
 
     match /entregas/{id} {

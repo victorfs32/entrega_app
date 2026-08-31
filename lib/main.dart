@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -141,6 +143,12 @@ class _AuthCheckPageState extends State<AuthCheckPage> {
         await FirebaseAuth.instance.signOut();
         return false;
       }
+
+      // Não bloqueia o carregamento do app por causa disso — é só um
+      // registro pro admin ver quem realmente usa o app, não algo crítico.
+      unawaited(
+        motoristaDoc.reference.update({'ultimoAcesso': Timestamp.now()}),
+      );
 
       return true;
     } catch (_) {
