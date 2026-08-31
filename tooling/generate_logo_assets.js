@@ -340,3 +340,16 @@ saveSvgFiles();
 savePng(path.join(outDir, 'baixa_facil_mark.png'), drawScaled(1024, true));
 savePng(path.join(outDir, 'baixa_facil_mark_transparent.png'), drawScaled(1024, false));
 
+const androidIconSizes = [
+  ['mipmap-mdpi', 48],
+  ['mipmap-hdpi', 72],
+  ['mipmap-xhdpi', 96],
+  ['mipmap-xxhdpi', 144],
+  ['mipmap-xxxhdpi', 192],
+];
+
+for (const [folder, size] of androidIconSizes) {
+  const iconDir = path.join(__dirname, '..', 'android', 'app', 'src', 'main', 'res', folder);
+  fs.mkdirSync(iconDir, { recursive: true });
+  savePng(path.join(iconDir, 'ic_baixa_facil.png'), drawScaled(size, true));
+}
