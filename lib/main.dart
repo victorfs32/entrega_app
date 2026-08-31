@@ -62,7 +62,7 @@ class _MyAppState extends State<MyApp> {
       builder: (context, isDark, child) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: 'Entrega App',
+          title: 'Baixa Fácil',
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,

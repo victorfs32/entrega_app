@@ -252,7 +252,7 @@ class _MenuPageState extends State<MenuPage> {
             _itemMenu(
               icon: Icons.info,
               titulo: 'Sobre o app',
-              subtitulo: 'Informações do Entrega App',
+              subtitulo: 'Informações do Baixa Fácil',
               onTap: () {},
             ),
           ],

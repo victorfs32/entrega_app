@@ -94,7 +94,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'Entrega App',
+                    'Baixa Fácil',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,

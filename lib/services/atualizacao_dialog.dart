@@ -116,7 +116,7 @@ class AtualizacaoDialog {
                                 baixando = false;
                                 erro = resultado.type == ResultType.permissionDenied
                                     ? "Permissão negada. Vá em Configurações > Apps > "
-                                          "Entrega App > \"Instalar apps desconhecidos\" "
+                                          "Baixa Fácil > \"Instalar apps desconhecidos\" "
                                           "e permita, depois toque em Atualizar de novo."
                                     : "Não foi possível abrir o instalador: "
                                           "${resultado.message}";

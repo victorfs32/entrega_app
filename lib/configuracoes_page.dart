@@ -86,7 +86,7 @@ class ConfiguracoesPage extends StatelessWidget {
                   color: Colors.blue,
                 ),
                 title: Text('Versão'),
-                subtitle: Text('Entrega App v1.0'),
+                subtitle: Text('Baixa Fácil v1.0'),
               ),
             ),
           ],
