@@ -48,6 +48,15 @@ class SincronizacaoFotosService {
         _texto(dados['fotoDownloadUrl']).isNotEmpty;
   }
 
+  // Entregas antigas nunca tiveram fotoPath2, então essa checagem
+  // continua sempre "sem pendência" pra elas — só passa a valer para
+  // registros novos que de fato tiraram a 2ª foto.
+  bool _temPendenciaFoto2(Map<String, dynamic> dados) {
+    final temFoto2Local = _texto(dados['fotoPath2']).isNotEmpty;
+    final foto2JaEnviada = _texto(dados['fotoUrl2']).isNotEmpty;
+    return temFoto2Local && !foto2JaEnviada;
+  }
+
   Future<void> _marcarErro(
     DocumentReference<Map<String, dynamic>> entrega,
     String mensagem,
@@ -144,6 +153,62 @@ class SincronizacaoFotosService {
     }
   }
 
+  /// Envia uma foto (a primeira ou a segunda, conforme [sufixo]: '' ou
+  /// '2') e grava o resultado nos campos correspondentes da entrega.
+  /// Retorna os dados atualizados em caso de sucesso, ou `null` se falhar
+  /// (o erro já fica registrado no próprio documento).
+  Future<Map<String, dynamic>?> _sincronizarUmaFoto({
+    required DocumentReference<Map<String, dynamic>> entrega,
+    required String codigo,
+    required String motoristaId,
+    required String fotoPath,
+    required String sufixo,
+  }) async {
+    try {
+      final resultadoUpload = await _enviarFotoParaServidor(
+        codigo: codigo,
+        fotoPath: fotoPath,
+        motoristaId: motoristaId,
+      );
+
+      final dadosAtualizados = <String, dynamic>{
+        'fotoUrl$sufixo': _texto(resultadoUpload['fotoUrl']),
+        'fotoSincronizada$sufixo': true,
+        'dataSincronizacaoFoto$sufixo': Timestamp.now(),
+        'erroSincronizacaoFoto$sufixo': FieldValue.delete(),
+        'dataErroSincronizacaoFoto$sufixo': FieldValue.delete(),
+      };
+
+      final fileId = _texto(resultadoUpload['fileId']);
+      final fotoViewUrl = _texto(resultadoUpload['fotoViewUrl']);
+      final fotoDownloadUrl = _texto(resultadoUpload['fotoDownloadUrl']);
+
+      if (fileId.isNotEmpty) {
+        dadosAtualizados['fotoServerPath$sufixo'] = fileId;
+      }
+
+      if (fotoViewUrl.isNotEmpty) {
+        dadosAtualizados['fotoViewUrl$sufixo'] = fotoViewUrl;
+      }
+
+      if (fotoDownloadUrl.isNotEmpty) {
+        dadosAtualizados['fotoDownloadUrl$sufixo'] = fotoDownloadUrl;
+      }
+
+      await entrega.update(dadosAtualizados);
+      return dadosAtualizados;
+    } catch (e) {
+      await entrega
+          .update({
+            'fotoSincronizada$sufixo': false,
+            'erroSincronizacaoFoto$sufixo': e.toString(),
+            'dataErroSincronizacaoFoto$sufixo': Timestamp.now(),
+          })
+          .catchError((_) {});
+      return null;
+    }
+  }
+
   /// Sincroniza as fotos pendentes do motorista logado.
   /// Retorna `null` se não houver usuário logado, se uma sincronização já
   /// estiver em andamento, ou se ocorrer um erro ao buscar as entregas.
@@ -174,7 +239,8 @@ class SincronizacaoFotosService {
       }).toList();
 
       final pendentes = entregas.where((doc) {
-        return !_temFotoRemota(doc.data());
+        final dados = doc.data();
+        return !_temFotoRemota(dados) || _temPendenciaFoto2(dados);
       }).toList();
 
       final totalEncontradas = pendentes.length;
@@ -185,7 +251,6 @@ class SincronizacaoFotosService {
         final dados = doc.data();
 
         final codigo = _texto(dados['codigo']);
-        final fotoPath = _texto(dados['fotoPath']);
 
         if (codigo.isEmpty) {
           await _marcarErro(doc.reference, 'Entrega sem código para sincronizar');
@@ -194,53 +259,51 @@ class SincronizacaoFotosService {
           continue;
         }
 
-        if (fotoPath.isEmpty) {
-          await _marcarErro(doc.reference, 'Entrega sem caminho local da foto');
-          totalErros++;
-          onProgresso?.call(totalEnviadas, totalErros);
-          continue;
+        var enviouAlguma = false;
+        var teveErro = false;
+
+        if (!_temFotoRemota(dados)) {
+          final fotoPath = _texto(dados['fotoPath']);
+
+          if (fotoPath.isEmpty) {
+            await _marcarErro(doc.reference, 'Entrega sem caminho local da foto');
+            teveErro = true;
+          } else {
+            final resultado = await _sincronizarUmaFoto(
+              entrega: doc.reference,
+              codigo: codigo,
+              motoristaId: uid,
+              fotoPath: fotoPath,
+              sufixo: '',
+            );
+
+            if (resultado != null) {
+              enviouAlguma = true;
+            } else {
+              teveErro = true;
+            }
+          }
         }
 
-        try {
-          final resultadoUpload = await _enviarFotoParaServidor(
+        if (_temPendenciaFoto2(dados)) {
+          final resultado2 = await _sincronizarUmaFoto(
+            entrega: doc.reference,
             codigo: codigo,
-            fotoPath: fotoPath,
             motoristaId: uid,
+            fotoPath: _texto(dados['fotoPath2']),
+            sufixo: '2',
           );
 
-          final dadosAtualizados = <String, dynamic>{
-            'fotoUrl': _texto(resultadoUpload['fotoUrl']),
-            'fotoSincronizada': true,
-            'dataSincronizacaoFoto': Timestamp.now(),
-            'erroSincronizacaoFoto': FieldValue.delete(),
-            'dataErroSincronizacaoFoto': FieldValue.delete(),
-          };
-
-          final fileId = _texto(resultadoUpload['fileId']);
-          final fotoViewUrl = _texto(resultadoUpload['fotoViewUrl']);
-          final fotoDownloadUrl = _texto(resultadoUpload['fotoDownloadUrl']);
-
-          if (fileId.isNotEmpty) {
-            dadosAtualizados['fotoServerPath'] = fileId;
+          if (resultado2 != null) {
+            enviouAlguma = true;
+          } else {
+            teveErro = true;
           }
-
-          if (fotoViewUrl.isNotEmpty) {
-            dadosAtualizados['fotoViewUrl'] = fotoViewUrl;
-          }
-
-          if (fotoDownloadUrl.isNotEmpty) {
-            dadosAtualizados['fotoDownloadUrl'] = fotoDownloadUrl;
-          }
-
-          await doc.reference.update(dadosAtualizados);
-
-          totalEnviadas++;
-          onProgresso?.call(totalEnviadas, totalErros);
-        } catch (e) {
-          await _marcarErro(doc.reference, e.toString());
-          totalErros++;
-          onProgresso?.call(totalEnviadas, totalErros);
         }
+
+        if (enviouAlguma) totalEnviadas++;
+        if (teveErro) totalErros++;
+        onProgresso?.call(totalEnviadas, totalErros);
       }
 
       return ResultadoSincronizacao(

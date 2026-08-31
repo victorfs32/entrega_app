@@ -40,19 +40,21 @@ class DetalhesEntregaPage extends StatelessWidget {
     return Icons.delivery_dining;
   }
 
-  bool get _temFotoUrl {
-    return pacote.fotoUrl != null &&
-        pacote.fotoUrl!.trim().isNotEmpty &&
-        pacote.fotoUrl!.trim() != 'null';
+  bool _temFotoUrl(String? url) {
+    return url != null && url.trim().isNotEmpty && url.trim() != 'null';
   }
 
-  bool get _temFotoLocal {
+  bool _temFotoLocal(String? path) {
     if (kIsWeb) return false;
 
-    return pacote.fotoPath != null &&
-        pacote.fotoPath!.trim().isNotEmpty &&
-        pacote.fotoPath!.trim() != 'null' &&
-        File(pacote.fotoPath!).existsSync();
+    return path != null &&
+        path.trim().isNotEmpty &&
+        path.trim() != 'null' &&
+        File(path).existsSync();
+  }
+
+  bool get _temSegundaFoto {
+    return _temFotoUrl(pacote.fotoUrl2) || _temFotoLocal(pacote.fotoPath2);
   }
 
   Future<void> _abrirGoogleMaps(BuildContext context) async {
@@ -107,29 +109,31 @@ class DetalhesEntregaPage extends StatelessWidget {
     );
   }
 
-  Widget _fotoEntrega(BuildContext context) {
+  Widget _fotoEntrega(
+    BuildContext context, {
+    required String? url,
+    required String? path,
+  }) {
     // Decodifica a imagem já no tamanho de exibição (260dp de altura) em vez
     // do tamanho original da foto. Sem isso, uma foto de 12MP tirada pela
     // câmera é decodificada inteira na memória só pra mostrar essa miniatura
     // — em celulares com pouca RAM isso causa travamentos e até crash.
     final cacheHeight = (260 * MediaQuery.devicePixelRatioOf(context)).round();
 
-    if (_temFotoUrl) {
+    if (_temFotoUrl(url)) {
       return GestureDetector(
         onTap: () {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => FotoZoomPage(
-                imagemUrl: pacote.fotoUrl!,
-              ),
+              builder: (_) => FotoZoomPage(imagemUrl: url),
             ),
           );
         },
         child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
           child: Image.network(
-            pacote.fotoUrl!,
+            url!,
             height: 260,
             width: double.infinity,
             fit: BoxFit.cover,
@@ -149,22 +153,20 @@ class DetalhesEntregaPage extends StatelessWidget {
       );
     }
 
-    if (_temFotoLocal) {
+    if (_temFotoLocal(path)) {
       return GestureDetector(
         onTap: () {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => FotoZoomPage(
-                imagemPath: pacote.fotoPath!,
-              ),
+              builder: (_) => FotoZoomPage(imagemPath: path),
             ),
           );
         },
         child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
           child: Image.file(
-            File(pacote.fotoPath!),
+            File(path!),
             height: 260,
             width: double.infinity,
             fit: BoxFit.cover,
@@ -317,7 +319,23 @@ class DetalhesEntregaPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            _fotoEntrega(context),
+            _fotoEntrega(context, url: pacote.fotoUrl, path: pacote.fotoPath),
+            if (_temSegundaFoto) ...[
+              const SizedBox(height: 16),
+              const Text(
+                "2ª foto da entrega",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 10),
+              _fotoEntrega(
+                context,
+                url: pacote.fotoUrl2,
+                path: pacote.fotoPath2,
+              ),
+            ],
           ],
         ),
       ),

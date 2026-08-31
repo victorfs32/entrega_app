@@ -4,7 +4,9 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
 class CameraEntregaPage extends StatefulWidget {
-  const CameraEntregaPage({super.key});
+  final String titulo;
+
+  const CameraEntregaPage({super.key, this.titulo = 'Foto da entrega'});
 
   @override
   State<CameraEntregaPage> createState() => _CameraEntregaPageState();
@@ -263,14 +265,14 @@ class _CameraEntregaPageState extends State<CameraEntregaPage>
                     onPressed: () => Navigator.pop(context),
                   ),
                 ),
-                const Positioned(
+                Positioned(
                   top: 24,
                   left: 80,
                   right: 80,
                   child: Text(
-                    'Foto da entrega',
+                    widget.titulo,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,

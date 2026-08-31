@@ -28,6 +28,7 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
   final TextEditingController nomeController = TextEditingController();
 
   File? foto;
+  File? foto2;
   double? lat;
   double? lng;
 
@@ -89,10 +90,14 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
     }
   }
 
-  Future<void> _tirarFoto() async {
+  Future<void> _tirarFoto({required bool segunda}) async {
     final picked = await Navigator.push<File>(
       context,
-      MaterialPageRoute(builder: (_) => const CameraEntregaPage()),
+      MaterialPageRoute(
+        builder: (_) => CameraEntregaPage(
+          titulo: segunda ? 'Foto 2 da entrega' : 'Foto da entrega',
+        ),
+      ),
     );
 
     if (picked == null) return;
@@ -104,13 +109,18 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
       await fotosDir.create(recursive: true);
     }
 
-    final nomeArquivo =
-        '${widget.codigo}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final sufixo = segunda ? '_2' : '';
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final nomeArquivo = '${widget.codigo}$sufixo' '_$timestamp.jpg';
 
     final novaFoto = await picked.copy('${fotosDir.path}/$nomeArquivo');
 
     setState(() {
-      foto = novaFoto;
+      if (segunda) {
+        foto2 = novaFoto;
+      } else {
+        foto = novaFoto;
+      }
     });
   }
 
@@ -192,6 +202,13 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
         'fotoServerPath': null,
         'fotoSincronizada': false,
 
+        if (foto2 != null) ...{
+          'fotoPath2': foto2!.path,
+          'fotoUrl2': null,
+          'fotoServerPath2': null,
+          'fotoSincronizada2': false,
+        },
+
         'lat': lat,
         'lng': lng,
 
@@ -222,6 +239,7 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
         dataLeitura: DateTime.now(),
         nomeRecebedor: nomeRecebedor,
         fotoPath: foto!.path,
+        fotoPath2: foto2?.path,
         lat: lat,
         lng: lng,
         entregue: true,
@@ -291,7 +309,7 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
               width: double.infinity,
               height: 50,
               child: FilledButton.icon(
-                onPressed: salvando ? null : _tirarFoto,
+                onPressed: salvando ? null : () => _tirarFoto(segunda: false),
                 icon: const Icon(Icons.camera_alt),
                 label: Text(
                   foto == null ? "Tirar foto da entrega" : "Trocar foto",
@@ -312,6 +330,52 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
                   cacheHeight:
                       (180 * MediaQuery.devicePixelRatioOf(context)).round(),
                 ),
+              ),
+
+            const SizedBox(height: 12),
+
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton.icon(
+                onPressed: salvando ? null : () => _tirarFoto(segunda: true),
+                icon: const Icon(Icons.add_a_photo_outlined),
+                label: Text(
+                  foto2 == null ? "Tirar 2ª foto (opcional)" : "Trocar 2ª foto",
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            if (foto2 != null)
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(
+                      foto2!,
+                      height: 180,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      cacheHeight:
+                          (180 * MediaQuery.devicePixelRatioOf(context))
+                              .round(),
+                    ),
+                  ),
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: IconButton.filled(
+                      onPressed: salvando ? null : () => setState(() => foto2 = null),
+                      icon: const Icon(Icons.close, size: 18),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.black.withValues(alpha: 0.55),
+                        minimumSize: const Size(32, 32),
+                      ),
+                    ),
+                  ),
+                ],
               ),
 
             const SizedBox(height: 12),
