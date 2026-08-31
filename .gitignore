@@ -1,3 +1,11 @@
+# Chave de assinatura do app — NUNCA versionar. Se vazar, qualquer um
+# pode publicar uma atualização falsa se passando pelo app de verdade.
+android/key.properties
+android/app/upload-keystore.jks
+android/keystore_base64.txt
+*.jks
+*.keystore
+
 # Miscellaneous
 *.class
 *.log

@@ -75,8 +75,6 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
     return Scaffold(
       body: Center(
         child: SingleChildScrollView(
@@ -87,10 +85,12 @@ class _LoginPageState extends State<LoginPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.local_shipping,
-                    size: 64,
-                    color: colors.primary,
+                  Image.asset(
+                    'assets/branding/baixa_facil_mark.png',
+                    width: 96,
+                    height: 96,
+                    semanticLabel: 'Logo Baixa Fácil',
+                    filterQuality: FilterQuality.high,
                   ),
                   const SizedBox(height: 16),
                   const Text(

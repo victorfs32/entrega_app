@@ -38,6 +38,14 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Configurar assinatura de release
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_PROPERTIES: ${{ secrets.ANDROID_KEY_PROPERTIES }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          echo "$ANDROID_KEY_PROPERTIES" > android/key.properties
+
       - name: Gerar APK
         run: flutter build apk --release
 
@@ -54,6 +62,6 @@ jobs:
             gh release upload "$TAG" app-release.apk --clobber
           else
             gh release create "$TAG" app-release.apk \
-              --title "Entrega App v${{ steps.version.outputs.version }}" \
-              --notes "Atualização automática do Entrega App."
+              --title "Baixa Fácil v${{ steps.version.outputs.version }}" \
+              --notes "Atualização automática do Baixa Fácil."
           fi
