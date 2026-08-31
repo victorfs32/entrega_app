@@ -4,13 +4,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'camera_entrega_page.dart';
 import 'main.dart';
 import 'model/pacote.dart';
+import 'services/localizacao_service.dart';
 import 'utils/codigo_rastreio.dart';
 
 class _ItemLote {
@@ -78,37 +78,15 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
   }
 
   Future<void> _pegarGPS() async {
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+    // GPS é opcional no lote: se não vier, segue sem travar o fluxo.
+    final position = await LocalizacaoService.obterLocalizacao();
 
-      LocationPermission permission = await Geolocator.checkPermission();
+    if (!mounted || position == null) return;
 
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 3),
-        ),
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        lat = position.latitude;
-        lng = position.longitude;
-      });
-    } catch (_) {
-      // GPS é opcional no lote: se não vier, segue sem travar o fluxo.
-    }
+    setState(() {
+      lat = position.latitude;
+      lng = position.longitude;
+    });
   }
 
   Future<Directory> _fotosDir() async {
@@ -413,10 +391,15 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    gpsOk ? 'GPS OK' : 'Pegando GPS... (não impede de começar)',
+                    gpsOk ? 'GPS OK' : 'GPS não disponível (não impede de começar)',
                     style: const TextStyle(fontSize: 13),
                   ),
                 ),
+                if (!gpsOk)
+                  TextButton(
+                    onPressed: _pegarGPS,
+                    child: const Text('Tentar de novo'),
+                  ),
               ],
             ),
             const Spacer(),

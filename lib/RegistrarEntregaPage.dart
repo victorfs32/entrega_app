@@ -4,11 +4,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 
 import 'camera_entrega_page.dart';
 import 'main.dart';
 import 'model/pacote.dart';
+import 'services/localizacao_service.dart';
 
 class RegistrarEntregaPage extends StatefulWidget {
   final String codigo;
@@ -48,46 +48,17 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
   }
 
   Future<void> _pegarGPS() async {
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    setState(() => pegandoGps = true);
 
-      if (!serviceEnabled) {
-        if (!mounted) return;
-        setState(() => pegandoGps = false);
-        return;
-      }
+    final position = await LocalizacaoService.obterLocalizacao();
 
-      LocationPermission permission = await Geolocator.checkPermission();
+    if (!mounted) return;
 
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        if (!mounted) return;
-        setState(() => pegandoGps = false);
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 3),
-        ),
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        lat = position.latitude;
-        lng = position.longitude;
-        pegandoGps = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => pegandoGps = false);
-    }
+    setState(() {
+      lat = position?.latitude;
+      lng = position?.longitude;
+      pegandoGps = false;
+    });
   }
 
   Future<void> _tirarFoto({required bool segunda}) async {
@@ -397,6 +368,11 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
                     style: const TextStyle(fontSize: 13),
                   ),
                 ),
+                if (!gpsOk && !pegandoGps)
+                  TextButton(
+                    onPressed: _pegarGPS,
+                    child: const Text("Tentar de novo"),
+                  ),
               ],
             ),
 

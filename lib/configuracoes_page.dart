@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'main.dart';
 
@@ -79,15 +80,22 @@ class ConfiguracoesPage extends StatelessWidget {
 
             const SizedBox(height: 10),
 
-            const Card(
-              child: ListTile(
-                leading: Icon(
-                  Icons.info,
-                  color: Colors.blue,
-                ),
-                title: Text('Versão'),
-                subtitle: Text('Baixa Fácil v1.0'),
-              ),
+            FutureBuilder<PackageInfo>(
+              future: PackageInfo.fromPlatform(),
+              builder: (context, snapshot) {
+                final versao = snapshot.data?.version ?? '...';
+
+                return Card(
+                  child: ListTile(
+                    leading: const Icon(
+                      Icons.info,
+                      color: Colors.blue,
+                    ),
+                    title: const Text('Versão'),
+                    subtitle: Text('Baixa Fácil v$versao'),
+                  ),
+                );
+              },
             ),
           ],
         ),
