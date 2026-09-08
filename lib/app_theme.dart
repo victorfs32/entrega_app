@@ -24,25 +24,26 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
   final Color info;
   final Color onInfo;
 
+  // Verde e azul batendo com a marca (assets/branding/baixa_facil_mark.svg).
   static const _light = AppSemanticColors(
-    success: Color(0xFF2E7D32),
+    success: Color(0xFF2EAD5B),
     onSuccess: Colors.white,
     warning: Color(0xFFEF6C00),
     onWarning: Colors.white,
     danger: Color(0xFFC62828),
     onDanger: Colors.white,
-    info: Color(0xFF1565C0),
+    info: Color(0xFF0A55A8),
     onInfo: Colors.white,
   );
 
   static const _dark = AppSemanticColors(
-    success: Color(0xFF81C784),
+    success: Color(0xFF7BE3A0),
     onSuccess: Color(0xFF00390D),
     warning: Color(0xFFFFB74D),
     onWarning: Color(0xFF4A2800),
     danger: Color(0xFFEF9A9A),
     onDanger: Color(0xFF680003),
-    info: Color(0xFF90CAF9),
+    info: Color(0xFF9CC7FF),
     onInfo: Color(0xFF00325A),
   );
 
@@ -91,8 +92,9 @@ extension AppSemanticColorsX on BuildContext {
 }
 
 class AppTheme {
-  static const Color _seedColor = Color(0xFF1565C0);
-  static const double _radius = 16;
+  // Azul da marca (assets/branding/baixa_facil_mark.svg).
+  static const Color _seedColor = Color(0xFF1673D1);
+  static const double _radius = 20;
   static const Size _minButtonSize = Size(64, 48);
 
   static ThemeData light() {
@@ -119,12 +121,27 @@ class AppTheme {
     ColorScheme colorScheme,
     AppSemanticColors semanticColors,
   ) {
-    final theme = ThemeData(colorScheme: colorScheme);
+    final theme = ThemeData(colorScheme: colorScheme, useMaterial3: true);
     final borderRadius = BorderRadius.circular(_radius);
 
     return theme.copyWith(
       extensions: [semanticColors],
       scaffoldBackgroundColor: colorScheme.surface,
+      visualDensity: VisualDensity.comfortable,
+      dividerTheme: DividerThemeData(
+        color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+        thickness: 1,
+        space: 1,
+      ),
+      textTheme: theme.textTheme.copyWith(
+        titleLarge: theme.textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w800,
+        ),
+        titleMedium: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+        bodyMedium: theme.textTheme.bodyMedium?.copyWith(height: 1.35),
+      ),
       appBarTheme: AppBarTheme(
         centerTitle: true,
         elevation: 0,
@@ -132,13 +149,20 @@ class AppTheme {
         backgroundColor: colorScheme.surface,
         foregroundColor: colorScheme.onSurface,
         surfaceTintColor: colorScheme.surfaceTint,
+        titleTextStyle: theme.textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w800,
+          color: colorScheme.onSurface,
+        ),
       ),
       cardTheme: CardThemeData(
-        elevation: 1,
-        margin: const EdgeInsets.all(4),
+        elevation: 0,
+        margin: const EdgeInsets.symmetric(vertical: 6),
         color: colorScheme.surfaceContainerLow,
-        surfaceTintColor: colorScheme.surfaceTint,
-        shape: RoundedRectangleBorder(borderRadius: borderRadius),
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: borderRadius,
+          side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.6)),
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -183,16 +207,16 @@ class AppTheme {
       listTileTheme: ListTileThemeData(
         iconColor: colorScheme.primary,
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 4,
+          horizontal: 18,
+          vertical: 6,
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        elevation: 3,
-        backgroundColor: colorScheme.primaryContainer,
-        foregroundColor: colorScheme.onPrimaryContainer,
+        elevation: 2,
+        backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(20),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
