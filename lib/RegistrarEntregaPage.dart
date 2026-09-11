@@ -120,6 +120,16 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
       return;
     }
 
+    if (foto2 == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tire a 2ª foto da entrega antes de salvar.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       salvando = true;
     });
@@ -245,8 +255,10 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
   Widget build(BuildContext context) {
     final gpsOk = lat != null && lng != null;
 
-    final podeSalvar =
-        !salvando && nomeController.text.trim().isNotEmpty && foto != null;
+    final podeSalvar = !salvando &&
+        nomeController.text.trim().isNotEmpty &&
+        foto != null &&
+        foto2 != null;
 
     return Scaffold(
       appBar: AppBar(title: const Text("Registrar Entrega")),
@@ -311,11 +323,11 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
             SizedBox(
               width: double.infinity,
               height: 50,
-              child: OutlinedButton.icon(
+              child: FilledButton.icon(
                 onPressed: salvando ? null : () => _tirarFoto(segunda: true),
                 icon: const Icon(Icons.add_a_photo_outlined),
                 label: Text(
-                  foto2 == null ? "Tirar 2ª foto (opcional)" : "Trocar 2ª foto",
+                  foto2 == null ? "Tirar 2ª foto da entrega" : "Trocar 2ª foto",
                 ),
               ),
             ),
@@ -415,6 +427,8 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
                             ? "Informe o recebedor"
                             : foto == null
                             ? "Tire a foto da entrega"
+                            : foto2 == null
+                            ? "Tire a 2ª foto da entrega"
                             : "Confirmar Entrega",
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),

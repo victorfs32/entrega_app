@@ -203,6 +203,21 @@ class _HomePageState extends State<HomePage> {
   Widget _topoUsuario() {
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance
+          .collection('configuracoes')
+          .doc('app')
+          .get(),
+      builder: (context, configSnapshot) {
+        final configDados = configSnapshot.data?.data() as Map<String, dynamic>?;
+        final assinaturaAtiva = configDados?['assinaturaAtiva'] == true;
+
+        return _topoUsuarioConteudo(assinaturaAtiva);
+      },
+    );
+  }
+
+  Widget _topoUsuarioConteudo(bool assinaturaAtiva) {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance
           .collection('motoristas')
           .doc(FirebaseAuth.instance.currentUser!.uid)
           .get(),
@@ -267,7 +282,7 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
 
-            if (!ehAdmin) ...[
+            if (!ehAdmin && assinaturaAtiva) ...[
               const Spacer(),
               _chipAssinatura(pagoAte),
             ],
