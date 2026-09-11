@@ -37,7 +37,14 @@ service cloud.firestore {
       allow update: if admin() ||
         (autenticado() && request.auth.uid == uid &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimoAcesso']));
-      allow create, delete: if admin();
+      // Autocadastro: o próprio usuário recém-autenticado pode criar o
+      // documento do seu perfil (tela de Cadastro no app) — mas nunca
+      // como admin, senão qualquer um que se cadastrasse ganharia acesso
+      // total ao sistema.
+      allow create: if admin() ||
+        (autenticado() && request.auth.uid == uid &&
+         request.resource.data.admin == false);
+      allow delete: if admin();
     }
 
     match /entregas/{id} {

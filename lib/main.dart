@@ -172,7 +172,7 @@ class _AuthCheckPageState extends State<AuthCheckPage> {
         }
 
         if (snapshot.data == true) {
-          return const AssinaturaGate();
+          return const HomePage();
         }
 
         return LoginPage(mensagemInicial: _mensagemBloqueio);
@@ -432,6 +432,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _abrirScanner() async {
+    final liberado = await verificarAcessoLiberado(context);
+    if (!liberado || !mounted) return;
+
     final codigo = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const ScannerPage()),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'assinatura_gate.dart';
 import 'entregas_page.dart';
 import 'financeiro_page.dart';
 import 'relatorios_page.dart';
@@ -189,6 +190,9 @@ class _MenuPageState extends State<MenuPage> {
               subtitulo: 'Bipar vários pacotes seguidos, com foto de cada um',
               iconColor: Colors.teal,
               onTap: () async {
+                final liberado = await verificarAcessoLiberado(context);
+                if (!liberado || !context.mounted) return;
+
                 final quantidade = await Navigator.push<int>(
                   context,
                   MaterialPageRoute(builder: (_) => const EntregaEmMassaPage()),

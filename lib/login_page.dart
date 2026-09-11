@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'cadastro_page.dart';
 import 'main.dart';
 
 class LoginPage extends StatefulWidget {
@@ -145,6 +146,22 @@ class _LoginPageState extends State<LoginPage> {
                         carregando ? 'Entrando...' : 'Entrar',
                       ),
                     ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  TextButton(
+                    onPressed: carregando
+                        ? null
+                        : () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const CadastroPage(),
+                              ),
+                            );
+                          },
+                    child: const Text('Não tem conta? Cadastre-se'),
                   ),
                 ],
               ),
