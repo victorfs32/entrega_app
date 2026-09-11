@@ -250,7 +250,10 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
 
     return Scaffold(
       appBar: AppBar(title: const Text("Registrar Entrega")),
-      body: Padding(
+      // Com as duas fotos abertas ao mesmo tempo, o conteúdo não cabia em
+      // celulares com tela menor — sem rolagem, o botão de confirmar
+      // ficava cortado fora da tela, invisível e impossível de tocar.
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -391,7 +394,7 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
               ],
             ),
 
-            const Spacer(),
+            const SizedBox(height: 24),
 
             SizedBox(
               width: double.infinity,

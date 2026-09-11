@@ -355,7 +355,7 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Entrega em massa')),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -402,7 +402,7 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
                   ),
               ],
             ),
-            const Spacer(),
+            const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               height: 52,
