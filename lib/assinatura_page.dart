@@ -30,6 +30,7 @@ class _AssinaturaPageState extends State<AssinaturaPage> {
   String? erro;
   String? copiaECola;
   Uint8List? qrCodeBytes;
+  num valor = 10;
 
   @override
   void initState() {
@@ -61,6 +62,7 @@ class _AssinaturaPageState extends State<AssinaturaPage> {
         qrCodeBytes = dados['qrCodeBase64'] != null
             ? base64Decode(dados['qrCodeBase64'] as String)
             : null;
+        valor = (dados['valor'] as num?) ?? valor;
         carregando = false;
       });
     } catch (e) {
@@ -107,12 +109,12 @@ class _AssinaturaPageState extends State<AssinaturaPage> {
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'O uso do Baixa Fácil custa R\$ 10,00 por semana. Pague pelo '
-              'Pix abaixo para liberar o acesso — a tela libera sozinha '
-              'assim que o pagamento for confirmado.',
+            Text(
+              'O uso do Baixa Fácil custa R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')} '
+              'por semana. Pague pelo Pix abaixo para liberar o acesso — a '
+              'tela libera sozinha assim que o pagamento for confirmado.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14),
+              style: const TextStyle(fontSize: 14),
             ),
             const SizedBox(height: 24),
             if (carregando)
