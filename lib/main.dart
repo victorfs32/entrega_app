@@ -17,6 +17,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'app_theme.dart';
 import 'login_page.dart';
 import 'manutencao_page.dart';
+import 'assinatura_gate.dart';
 
 List<Pacote> listaPacotes = [];
 
@@ -171,7 +172,7 @@ class _AuthCheckPageState extends State<AuthCheckPage> {
         }
 
         if (snapshot.data == true) {
-          return const HomePage();
+          return const AssinaturaGate();
         }
 
         return LoginPage(mensagemInicial: _mensagemBloqueio);
