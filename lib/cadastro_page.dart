@@ -2,8 +2,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'main.dart';
+
+const String _dashboardUrl = 'https://dashboard-entregas-kappa.vercel.app';
+const String _whatsappSuporteUrl = 'https://wa.me/5585987426218';
+
+Future<void> _abrirLink(String url) async {
+  final uri = Uri.parse(url);
+  await launchUrl(uri, mode: LaunchMode.externalApplication);
+}
 
 class CadastroPage extends StatefulWidget {
   const CadastroPage({super.key});
@@ -51,35 +60,44 @@ class _CadastroPageState extends State<CadastroPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
+            children: [
+              const Text(
                 'Sua conta foi criada. Aqui vai um resumo rápido do que você '
                 'pode fazer:',
               ),
-              SizedBox(height: 14),
-              _ItemBoasVindas(
+              const SizedBox(height: 14),
+              const _ItemBoasVindas(
                 icon: Icons.qr_code_scanner,
                 texto: 'Bipar pacotes e registrar a entrega com foto na hora.',
               ),
-              _ItemBoasVindas(
+              const _ItemBoasVindas(
                 icon: Icons.dynamic_feed,
                 texto: 'Bipar vários pacotes seguidos no modo "Entrega em massa".',
               ),
-              _ItemBoasVindas(
+              const _ItemBoasVindas(
                 icon: Icons.bar_chart,
                 texto: 'Acompanhar relatórios e o financeiro (ganho x recebido).',
               ),
-              _ItemBoasVindas(
+              const _ItemBoasVindas(
                 icon: Icons.cloud_upload_outlined,
                 texto: 'As fotos sincronizam sozinhas com a internet ligada.',
               ),
-              SizedBox(height: 14),
+              const _ItemBoasVindas(
+                icon: Icons.local_shipping_outlined,
+                texto:
+                    'Você pode editar o valor que recebe por pacote em '
+                    'Configurações, a qualquer momento.',
+              ),
+              const SizedBox(height: 14),
               _ItemBoasVindas(
                 icon: Icons.computer,
-                texto:
-                    'Também existe um painel para computador, com relatórios '
-                    'e mais detalhes — peça o link ao administrador se '
-                    'quiser acessar pelo navegador.',
+                texto: 'Também existe um painel para acessar pelo computador.',
+                onTap: () => _abrirLink(_dashboardUrl),
+              ),
+              _ItemBoasVindas(
+                icon: Icons.support_agent,
+                texto: 'Precisa de ajuda? Fale com o suporte pelo WhatsApp.',
+                onTap: () => _abrirLink(_whatsappSuporteUrl),
               ),
             ],
           ),
@@ -288,20 +306,40 @@ class _CadastroPageState extends State<CadastroPage> {
 class _ItemBoasVindas extends StatelessWidget {
   final IconData icon;
   final String texto;
+  final VoidCallback? onTap;
 
-  const _ItemBoasVindas({required this.icon, required this.texto});
+  const _ItemBoasVindas({required this.icon, required this.texto, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 10),
-          Expanded(child: Text(texto)),
-        ],
+    final clicavel = onTap != null;
+    final cor = Theme.of(context).colorScheme.primary;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 20, color: cor),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                texto,
+                style: clicavel
+                    ? TextStyle(
+                        color: cor,
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
+                      )
+                    : null,
+              ),
+            ),
+            if (clicavel) Icon(Icons.chevron_right, size: 18, color: cor),
+          ],
+        ),
       ),
     );
   }
