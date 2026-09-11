@@ -224,7 +224,9 @@ class _HomePageState extends State<HomePage> {
         } else if (valor is double) {
           valorPacote = valor;
         }
-        final cargo = dados['admin'] == true ? 'Administrador' : 'Motorista';
+        final ehAdmin = dados['admin'] == true;
+        final cargo = ehAdmin ? 'Administrador' : 'Motorista';
+        final pagoAte = (dados['pagoAte'] as Timestamp?)?.toDate();
         final colors = Theme.of(context).colorScheme;
 
         return Row(
@@ -264,9 +266,59 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
+
+            if (!ehAdmin) ...[
+              const Spacer(),
+              _chipAssinatura(pagoAte),
+            ],
           ],
         );
       },
+    );
+  }
+
+  Widget _chipAssinatura(DateTime? pagoAte) {
+    final semanticColors = context.semanticColors;
+
+    Color cor;
+    String texto;
+
+    if (pagoAte == null) {
+      cor = semanticColors.danger;
+      texto = 'Assinatura pendente';
+    } else {
+      final dias = pagoAte.difference(DateTime.now()).inDays;
+
+      if (dias < 0) {
+        cor = semanticColors.danger;
+        texto = 'Assinatura vencida';
+      } else if (dias == 0) {
+        cor = semanticColors.warning;
+        texto = 'Vence hoje';
+      } else if (dias <= 2) {
+        cor = semanticColors.warning;
+        texto = 'Vence em $dias dia${dias == 1 ? '' : 's'}';
+      } else {
+        cor = semanticColors.success;
+        texto = 'Vence em $dias dias';
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: cor.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        texto,
+        style: TextStyle(
+          color: cor,
+          fontWeight: FontWeight.bold,
+          fontSize: 11,
+        ),
+        textAlign: TextAlign.right,
+      ),
     );
   }
 
