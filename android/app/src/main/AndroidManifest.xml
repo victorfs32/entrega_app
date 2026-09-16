@@ -5,6 +5,15 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Rastreio em tempo real: serviço em primeiro plano com localização.
+         De propósito SEM ACCESS_BACKGROUND_LOCATION — um foreground
+         service do tipo "location" já é tratado como acesso em primeiro
+         plano pelo Android enquanto está ativo, sem precisar dessa
+         permissão nem do fluxo extra de "Permitir o tempo todo". -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:label="Baixa Fácil"
         android:name="${applicationName}"
@@ -37,6 +46,18 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- flutter_foreground_task não injeta essa tag sozinho (não tem
+             <service> no próprio AndroidManifest.xml do pacote) — precisa
+             declarar aqui manualmente, senão o serviço não sobe.
+             stopWithTask NÃO é definido como true de propósito: o
+             requisito é o rastreio continuar mesmo com o app fechado
+             (removido da lista de recentes), então o serviço precisa
+             sobreviver a isso. -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="location"
+            android:exported="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

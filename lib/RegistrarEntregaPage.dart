@@ -4,12 +4,16 @@ import 'package:path_provider/path_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'camera_entrega_page.dart';
 import 'main.dart';
 import 'model/pacote.dart';
 import 'services/localizacao_service.dart';
+import 'services/rastreio_service.dart';
 import 'utils/codigo_rastreio.dart';
+
+const String _rastreioBaseUrl = 'https://dashboard-entregas-kappa.vercel.app/rastreio';
 
 class RegistrarEntregaPage extends StatefulWidget {
   final String codigo;
@@ -41,17 +45,40 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
   // em utils/codigo_rastreio.dart sobre por que isso pode acontecer).
   late String transportadora;
 
+  bool _confirmada = false;
+
   @override
   void initState() {
     super.initState();
     transportadora = widget.transportadora;
     _pegarGPS();
+
+    // Sem "await" de propósito: não deve atrasar a tela nem bloquear a
+    // entrega se o rastreio público falhar por algum motivo.
+    RastreioService.iniciarRastreioEntrega(widget.codigo, transportadora);
   }
 
   @override
   void dispose() {
     nomeController.dispose();
+
+    // Escaneou mas saiu sem confirmar: encerra o rastreio pra não deixar
+    // esse código preso como "ativo" e bloquear o rastreio do próximo
+    // pacote que o motorista escanear.
+    if (!_confirmada) {
+      RastreioService.encerrarRastreioEntrega(widget.codigo);
+    }
+
     super.dispose();
+  }
+
+  Future<void> _compartilharRastreio() async {
+    await SharePlus.instance.share(
+      ShareParams(
+        text: 'Acompanhe sua entrega em tempo real: '
+            '$_rastreioBaseUrl/${widget.codigo}',
+      ),
+    );
   }
 
   Future<void> _pegarGPS() async {
@@ -219,6 +246,9 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
         });
       }
 
+      _confirmada = true;
+      await RastreioService.encerrarRastreioEntrega(widget.codigo);
+
       final index = listaPacotes.indexWhere((p) => p.codigo == widget.codigo);
 
       final pacoteAtualizado = Pacote(
@@ -302,7 +332,18 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
+
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _compartilharRastreio,
+                icon: const Icon(Icons.share_outlined, size: 18),
+                label: const Text('Compartilhar rastreio com o cliente'),
+              ),
+            ),
+
+            const SizedBox(height: 6),
 
             TextField(
               controller: nomeController,
