@@ -9,6 +9,7 @@ import 'camera_entrega_page.dart';
 import 'main.dart';
 import 'model/pacote.dart';
 import 'services/localizacao_service.dart';
+import 'utils/codigo_rastreio.dart';
 
 class RegistrarEntregaPage extends StatefulWidget {
   final String codigo;
@@ -35,9 +36,15 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
   bool salvando = false;
   bool pegandoGps = true;
 
+  // Detectada automaticamente pelo formato do código, mas editável — o
+  // motorista corrige na hora se o app classificar errado (ver comentário
+  // em utils/codigo_rastreio.dart sobre por que isso pode acontecer).
+  late String transportadora;
+
   @override
   void initState() {
     super.initState();
+    transportadora = widget.transportadora;
     _pegarGPS();
   }
 
@@ -174,7 +181,7 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
 
       final dadosEntrega = {
         'codigo': widget.codigo,
-        'transportadora': widget.transportadora,
+        'transportadora': transportadora,
         'recebedor': nomeRecebedor,
         'entregue': true,
 
@@ -216,7 +223,7 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
 
       final pacoteAtualizado = Pacote(
         codigo: widget.codigo,
-        transportadora: widget.transportadora,
+        transportadora: transportadora,
         dataLeitura: DateTime.now(),
         nomeRecebedor: nomeRecebedor,
         fotoPath: foto!.path,
@@ -274,7 +281,24 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
               child: ListTile(
                 leading: const Icon(Icons.inventory_2),
                 title: Text(widget.codigo),
-                subtitle: Text(widget.transportadora),
+                // Editável: a transportadora é detectada automaticamente
+                // pelo formato do código, mas o motorista pode corrigir
+                // aqui se o app classificar errado.
+                subtitle: DropdownButton<String>(
+                  value: transportadora,
+                  isDense: true,
+                  underline: const SizedBox.shrink(),
+                  items: {
+                    ...CodigoRastreio.transportadorasDisponiveis,
+                    transportadora,
+                  }.map((opcao) {
+                    return DropdownMenuItem(value: opcao, child: Text(opcao));
+                  }).toList(),
+                  onChanged: (novaTransportadora) {
+                    if (novaTransportadora == null) return;
+                    setState(() => transportadora = novaTransportadora);
+                  },
+                ),
               ),
             ),
 
