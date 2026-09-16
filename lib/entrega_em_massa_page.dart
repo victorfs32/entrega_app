@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'camera_entrega_page.dart';
 import 'main.dart';
 import 'model/pacote.dart';
+import 'services/entrega_status_service.dart';
 import 'services/localizacao_service.dart';
 import 'utils/codigo_rastreio.dart';
 
@@ -138,6 +139,15 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Pacote $codigoLido já foi bipado neste lote.')),
+      );
+      return;
+    }
+
+    if (await EntregaStatusService.jaEntregue(codigoLido)) {
+      await HapticFeedback.heavyImpact();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Pacote $codigoLido já foi entregue anteriormente.')),
       );
       return;
     }

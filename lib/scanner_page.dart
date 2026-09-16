@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'RegistrarEntregaPage.dart';
+import 'services/entrega_status_service.dart';
 import 'utils/codigo_rastreio.dart';
 
 class ScannerPage extends StatefulWidget {
@@ -63,6 +64,39 @@ class _ScannerPageState extends State<ScannerPage> {
 
     // Som padrão de confirmação do sistema.
     await SystemSound.play(SystemSoundType.click);
+
+    if (!mounted) return;
+
+    final jaEntregue = await EntregaStatusService.jaEntregue(codigoLido);
+
+    if (jaEntregue) {
+      if (!mounted) return;
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Text('Pacote já entregue'),
+          content: Text(
+            'O código $codigoLido já foi registrado como entregue '
+            'anteriormente. Não é possível bipar de novo.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+
+      if (!mounted) return;
+
+      // Libera pra tentar bipar outro pacote em vez de fechar o scanner.
+      jaLeu = false;
+      await controller.start();
+      return;
+    }
 
     if (!mounted) return;
 
