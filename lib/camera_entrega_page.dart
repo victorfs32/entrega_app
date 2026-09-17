@@ -75,20 +75,45 @@ class _CameraEntregaPageState extends State<CameraEntregaPage>
         orElse: () => cameras.first,
       );
 
-      final novoController = CameraController(
-        cameraTraseira,
-        // Qualidade máxima suportada pelo aparelho para a foto de
-        // comprovante. A miniatura continua sendo decodificada em baixa
-        // resolução via cacheWidth/cacheHeight nas telas que exibem a
-        // foto — isso não reduz a qualidade do arquivo salvo, só evita
-        // decodificar a imagem inteira na memória pra mostrar uma
-        // miniatura pequena.
+      // Tenta a maior qualidade e vai caindo se o aparelho recusar. Em
+      // alguns celulares o CameraX não consegue combinar a resolução
+      // máxima de preview + captura ("No supported surface combination"),
+      // mesmo sendo um erro só de combinação de streams — não de
+      // permissão nem de hardware quebrado — então cai pra próxima
+      // qualidade em vez de deixar a tela travada no erro.
+      const presetsEmOrdem = [
         ResolutionPreset.max,
-        enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.jpeg,
-      );
+        ResolutionPreset.veryHigh,
+        ResolutionPreset.high,
+        ResolutionPreset.medium,
+      ];
 
-      await novoController.initialize();
+      CameraController? novoController;
+      Object? ultimoErro;
+
+      for (final preset in presetsEmOrdem) {
+        final tentativa = CameraController(
+          cameraTraseira,
+          preset,
+          enableAudio: false,
+          imageFormatGroup: ImageFormatGroup.jpeg,
+        );
+
+        try {
+          await tentativa.initialize();
+          novoController = tentativa;
+          break;
+        } catch (e) {
+          ultimoErro = e;
+          await tentativa.dispose();
+        }
+      }
+
+      if (novoController == null) {
+        if (ultimoErro is CameraException) throw ultimoErro;
+        throw ultimoErro ?? Exception('Falha desconhecida ao abrir a camera.');
+      }
+
       await novoController.setFlashMode(FlashMode.off);
 
       if (!mounted) {
