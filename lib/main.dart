@@ -9,6 +9,7 @@ import 'firebase_options.dart';
 import 'scanner_page.dart';
 import 'model/pacote.dart';
 import 'entregas_page.dart';
+import 'fotos_pendentes_page.dart';
 import 'menu_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/atualizacao_service.dart';
@@ -571,17 +572,24 @@ class _HomePageState extends State<HomePage> {
     required IconData icon,
     required String texto,
     required Color color,
+    VoidCallback? onTap,
   }) {
-    return Padding(
+    final linha = Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
           Icon(icon, color: color),
           const SizedBox(width: 10),
           Expanded(child: Text(texto)),
+          if (onTap != null)
+            Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.outline),
         ],
       ),
     );
+
+    if (onTap == null) return linha;
+
+    return InkWell(borderRadius: BorderRadius.circular(10), onTap: onTap, child: linha);
   }
 
   Widget _resumoDoDia({
@@ -632,6 +640,16 @@ class _HomePageState extends State<HomePage> {
               icon: Icons.cloud_upload_outlined,
               texto: 'Fotos pendentes: $fotosPendentes',
               color: colors.secondary,
+              onTap: fotosPendentes == 0
+                  ? null
+                  : () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const FotosPendentesPage(),
+                        ),
+                      );
+                    },
             ),
 
             const SizedBox(height: 18),
