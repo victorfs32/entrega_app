@@ -5,13 +5,15 @@ import 'package:flutter/material.dart';
 import 'assinatura_page.dart';
 
 /// Checa se o motorista pode usar as funcionalidades que exigem assinatura
-/// em dia (bipar/registrar entrega) — admin e app com cobrança desligada
-/// sempre liberam. Se estiver bloqueado, mostra um aviso com atalho pra
-/// tela de pagamento e retorna `false`; quem chamar não deve prosseguir
-/// com a ação nesse caso.
+/// em dia (bipar/registrar entrega) — admin, app com cobrança desligada e
+/// quem ainda está no período de teste grátis sempre liberam. Se estiver
+/// bloqueado, mostra um aviso com atalho pra tela de pagamento e retorna
+/// `false`; quem chamar não deve prosseguir com a ação nesse caso.
 Future<bool> verificarAcessoLiberado(BuildContext context) async {
   final usuario = FirebaseAuth.instance.currentUser;
   if (usuario == null) return true;
+
+  bool testeJaTerminou = false;
 
   try {
     final configDoc = await FirebaseFirestore.instance
@@ -33,6 +35,19 @@ Future<bool> verificarAcessoLiberado(BuildContext context) async {
     final pagoAte = (dados?['pagoAte'] as Timestamp?)?.toDate();
     final emDia = pagoAte != null && pagoAte.isAfter(DateTime.now());
     if (emDia) return true;
+
+    // Teste grátis: conta a partir do cadastro do motorista, não da data
+    // que a cobrança foi ligada — assim quem já estava usando o app antes
+    // não ganha um teste "de graça" retroativo só porque o admin acabou de
+    // ativar a assinatura.
+    final diasTeste = (configDoc.data()?['diasTesteGratis'] as num?)?.toInt() ?? 0;
+    final criadoEm = (dados?['criadoEm'] as Timestamp?)?.toDate();
+
+    if (diasTeste > 0 && criadoEm != null) {
+      final fimDoTeste = criadoEm.add(Duration(days: diasTeste));
+      if (DateTime.now().isBefore(fimDoTeste)) return true;
+      testeJaTerminou = true;
+    }
   } catch (_) {
     // Sem conseguir confirmar por um problema de rede, não bloqueia —
     // igual ao resto do app, prefere deixar passar a travar o motorista
@@ -47,9 +62,14 @@ Future<bool> verificarAcessoLiberado(BuildContext context) async {
     builder: (dialogContext) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       title: const Text('Assinatura necessária'),
-      content: const Text(
-        'Pra bipar e registrar entregas, sua assinatura semanal precisa '
-        'estar em dia. Você ainda pode ver a tela inicial normalmente.',
+      content: Text(
+        testeJaTerminou
+            ? 'Seu período de teste grátis acabou. Pra continuar bipando e '
+                'registrando entregas, ative sua assinatura semanal. Você '
+                'ainda pode ver a tela inicial normalmente.'
+            : 'Pra bipar e registrar entregas, sua assinatura semanal '
+                'precisa estar em dia. Você ainda pode ver a tela inicial '
+                'normalmente.',
       ),
       actions: [
         TextButton(

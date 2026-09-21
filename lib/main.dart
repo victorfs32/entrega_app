@@ -219,13 +219,14 @@ class _HomePageState extends State<HomePage> {
       builder: (context, configSnapshot) {
         final configDados = configSnapshot.data?.data() as Map<String, dynamic>?;
         final assinaturaAtiva = configDados?['assinaturaAtiva'] == true;
+        final diasTeste = (configDados?['diasTesteGratis'] as num?)?.toInt() ?? 0;
 
-        return _topoUsuarioConteudo(assinaturaAtiva);
+        return _topoUsuarioConteudo(assinaturaAtiva, diasTeste);
       },
     );
   }
 
-  Widget _topoUsuarioConteudo(bool assinaturaAtiva) {
+  Widget _topoUsuarioConteudo(bool assinaturaAtiva, int diasTeste) {
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance
           .collection('motoristas')
@@ -252,6 +253,7 @@ class _HomePageState extends State<HomePage> {
         final ehAdmin = dados['admin'] == true;
         final cargo = ehAdmin ? 'Administrador' : 'Motorista';
         final pagoAte = (dados['pagoAte'] as Timestamp?)?.toDate();
+        final criadoEm = (dados['criadoEm'] as Timestamp?)?.toDate();
         final colors = Theme.of(context).colorScheme;
 
         return Row(
@@ -294,7 +296,7 @@ class _HomePageState extends State<HomePage> {
 
             if (!ehAdmin && assinaturaAtiva) ...[
               const Spacer(),
-              _chipAssinatura(pagoAte),
+              _chipAssinatura(pagoAte, criadoEm, diasTeste),
             ],
           ],
         );
@@ -302,11 +304,27 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _chipAssinatura(DateTime? pagoAte) {
+  Widget _chipAssinatura(DateTime? pagoAte, DateTime? criadoEm, int diasTeste) {
     final semanticColors = context.semanticColors;
+
+    final emDia = pagoAte != null && pagoAte.isAfter(DateTime.now());
 
     Color cor;
     String texto;
+
+    if (!emDia && diasTeste > 0 && criadoEm != null) {
+      final diasRestantesTeste =
+          criadoEm.add(Duration(days: diasTeste)).difference(DateTime.now()).inDays;
+
+      if (diasRestantesTeste >= 0) {
+        cor = semanticColors.info;
+        texto = diasRestantesTeste == 0
+            ? 'Teste grátis: termina hoje'
+            : 'Teste grátis: $diasRestantesTeste dia${diasRestantesTeste == 1 ? '' : 's'}';
+
+        return _chipConteudo(cor, texto);
+      }
+    }
 
     if (pagoAte == null) {
       cor = semanticColors.danger;
@@ -329,6 +347,10 @@ class _HomePageState extends State<HomePage> {
       }
     }
 
+    return _chipConteudo(cor, texto);
+  }
+
+  Widget _chipConteudo(Color cor, String texto) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(

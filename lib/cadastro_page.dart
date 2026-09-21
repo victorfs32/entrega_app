@@ -44,6 +44,25 @@ class _CadastroPageState extends State<CadastroPage> {
   Future<void> _mostrarBoasVindas() async {
     if (!mounted) return;
 
+    var diasTeste = 0;
+
+    try {
+      final configDoc = await FirebaseFirestore.instance
+          .collection('configuracoes')
+          .doc('app')
+          .get();
+
+      final assinaturaAtiva = configDoc.data()?['assinaturaAtiva'] == true;
+      if (assinaturaAtiva) {
+        diasTeste = (configDoc.data()?['diasTesteGratis'] as num?)?.toInt() ?? 0;
+      }
+    } catch (_) {
+      // Sem conseguir ler a configuração, só não mostra o aviso de teste —
+      // o cadastro em si já foi concluído com sucesso.
+    }
+
+    if (!mounted) return;
+
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -66,6 +85,29 @@ class _CadastroPageState extends State<CadastroPage> {
                 'pode fazer:',
               ),
               const SizedBox(height: 14),
+              if (diasTeste > 0) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.card_giftcard, color: Colors.green),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Você tem $diasTeste dias grátis pra testar o app '
+                          'antes de qualquer cobrança.',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
               const _ItemBoasVindas(
                 icon: Icons.qr_code_scanner,
                 texto: 'Bipar pacotes e registrar a entrega com foto na hora.',
