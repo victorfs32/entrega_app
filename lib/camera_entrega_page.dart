@@ -91,21 +91,33 @@ class _CameraEntregaPageState extends State<CameraEntregaPage>
       CameraController? novoController;
       Object? ultimoErro;
 
-      for (final preset in presetsEmOrdem) {
-        final tentativa = CameraController(
-          cameraTraseira,
-          preset,
-          enableAudio: false,
-          imageFormatGroup: ImageFormatGroup.jpeg,
-        );
+      // Duas rodadas: a 2ª só entra em ação se a 1ª falhar em todas as
+      // resoluções, o que costuma ser sinal de que o hardware ainda estava
+      // sendo liberado pelo leitor de código de barras (acontece mais na
+      // baixa em massa, que troca de câmera várias vezes seguidas) — não
+      // um problema real de resolução. Uma pequena espera antes de repetir
+      // resolve isso sem precisar o usuário tocar em "Tentar novamente".
+      for (var rodada = 0; rodada < 2 && novoController == null; rodada++) {
+        if (rodada > 0) {
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
 
-        try {
-          await tentativa.initialize();
-          novoController = tentativa;
-          break;
-        } catch (e) {
-          ultimoErro = e;
-          await tentativa.dispose();
+        for (final preset in presetsEmOrdem) {
+          final tentativa = CameraController(
+            cameraTraseira,
+            preset,
+            enableAudio: false,
+            imageFormatGroup: ImageFormatGroup.jpeg,
+          );
+
+          try {
+            await tentativa.initialize();
+            novoController = tentativa;
+            break;
+          } catch (e) {
+            ultimoErro = e;
+            await tentativa.dispose();
+          }
         }
       }
 

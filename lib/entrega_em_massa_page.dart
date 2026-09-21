@@ -157,13 +157,21 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
     // Fecha o leitor de vez (não só stop()) antes de abrir a câmera de
     // foto. Um stop() sozinho pode deixar a sessão de câmera "presa" no
     // driver do aparelho, e a segunda câmera (a de foto) abre com tela
-    // preta porque não consegue pegar o hardware.
+    // preta ou com erro de combinação de superfícies porque o hardware
+    // ainda não foi liberado de verdade quando o CameraController tenta
+    // reivindicar ele.
     final controladorAntigo = controller;
     setState(() => controller = null);
     await controladorAntigo?.dispose();
 
     await HapticFeedback.mediumImpact();
     await SystemSound.play(SystemSoundType.click);
+
+    // Mesma margem de segurança usada na volta (scanner -> foto -> scanner),
+    // só que na ida. Bipar vários pacotes em sequência é justamente o que
+    // repete essa troca de câmera várias vezes seguidas, então é aqui que a
+    // corrida com o driver mais aparece.
+    await Future.delayed(const Duration(milliseconds: 400));
 
     if (!mounted) return;
 
