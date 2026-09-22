@@ -71,17 +71,6 @@ service cloud.firestore {
       allow delete: if admin() || (ativo() && resource.data.motoristaId == request.auth.uid);
     }
 
-    // Rastreio público de uma entrega específica — cliente acompanha pelo
-    // link, sem login. Documento identificado pelo próprio "codigo" de
-    // /entregas, só existe enquanto o pacote está a caminho. Mesmo padrão
-    // de /configuracoes/app: leitura pública, escrita só do dono
-    // autenticado.
-    match /rastreio_publico/{codigo} {
-      allow read: if true;
-      allow write: if ativo() && request.resource.data.motoristaId == request.auth.uid;
-      allow delete: if admin();
-    }
-
     // Doc público (leitura por qualquer um, autenticado ou não) porque o
     // app precisa checar o modo de manutenção antes mesmo do login.
     match /configuracoes/app {

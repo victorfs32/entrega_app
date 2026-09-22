@@ -18,17 +18,20 @@ class _ItemLote {
   final String codigo;
   final String transportadora;
   final File foto;
+  final File fotoLocal;
 
   _ItemLote({
     required this.codigo,
     required this.transportadora,
     required this.foto,
+    required this.fotoLocal,
   });
 }
 
 /// Bipa vários pacotes em sequência para o mesmo recebedor/local, tirando
-/// uma foto individual de cada um (a foto continua sendo a prova de entrega
-/// por pacote — só o nome do recebedor e o GPS são compartilhados pelo lote).
+/// duas fotos por pacote (do pacote e do local de entrega) — só o nome do
+/// recebedor e o GPS são compartilhados pelo lote. Antes de salvar, mostra
+/// uma tela de conferência com a lista completa e o total de pacotes.
 class EntregaEmMassaPage extends StatefulWidget {
   const EntregaEmMassaPage({super.key});
 
@@ -49,6 +52,7 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
   Directory? _fotosDirCache;
 
   bool escaneando = false;
+  bool confirmando = false;
   bool processandoFoto = false;
   bool salvando = false;
 
@@ -112,6 +116,27 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
       escaneando = true;
       controller = _novoScannerController();
     });
+  }
+
+  Future<File?> _abrirCamera(String titulo) {
+    return Navigator.push<File>(
+      context,
+      MaterialPageRoute(builder: (_) => CameraEntregaPage(titulo: titulo)),
+    );
+  }
+
+  Future<void> _voltarAoScanner() async {
+    // A câmera de foto espera o próprio dispose() antes de fechar a tela
+    // (camera_entrega_page.dart), mas a confirmação que o Android/iOS dá
+    // pro plugin nem sempre significa que o hardware já está 100% livre no
+    // driver. Essa pausa extra é a margem de segurança pra evitar a
+    // corrida — sem ela, o leitor às vezes abre com tela preta.
+    await Future.delayed(const Duration(milliseconds: 600));
+
+    processandoFoto = false;
+    if (!mounted) return;
+
+    setState(() => controller = _novoScannerController());
   }
 
   Future<void> _onDetect(BarcodeCapture capture) async {
@@ -178,41 +203,46 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
     final transportadora = CodigoRastreio.transportadora(codigoLido);
     final codigo = codigoLido;
 
-    final foto = await Navigator.push<File>(
-      context,
-      MaterialPageRoute(builder: (_) => const CameraEntregaPage()),
-    );
+    final fotoPacote = await _abrirCamera('Foto do pacote');
 
-    if (foto != null && mounted) {
-      final dir = await _fotosDir();
-      final nomeArquivo = '${codigo}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final fotoSalva = await foto.copy('${dir.path}/$nomeArquivo');
-
-      if (mounted) {
-        setState(() {
-          itens.add(
-            _ItemLote(
-              codigo: codigo,
-              transportadora: transportadora,
-              foto: fotoSalva,
-            ),
-          );
-          codigosNoLote.add(codigo);
-        });
-      }
+    if (fotoPacote == null || !mounted) {
+      await _voltarAoScanner();
+      return;
     }
 
-    // A câmera de foto agora espera o próprio dispose() antes de fechar a
-    // tela (camera_entrega_page.dart), mas a confirmação que o Android/iOS
-    // dá pro plugin nem sempre significa que o hardware já está 100% livre
-    // no driver. Essa pausa extra é a margem de segurança pra evitar a
-    // corrida — sem ela, o leitor às vezes abre com tela preta.
-    await Future.delayed(const Duration(milliseconds: 600));
-
-    processandoFoto = false;
+    // Mesma margem de segurança entre as duas aberturas de câmera seguidas.
+    await Future.delayed(const Duration(milliseconds: 300));
     if (!mounted) return;
 
-    setState(() => controller = _novoScannerController());
+    final fotoLocal = await _abrirCamera('Foto do local da entrega');
+
+    if (fotoLocal == null || !mounted) {
+      await _voltarAoScanner();
+      return;
+    }
+
+    final dir = await _fotosDir();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final fotoPacoteSalva = await fotoPacote.copy('${dir.path}/${codigo}_$timestamp.jpg');
+    final fotoLocalSalva = await fotoLocal.copy(
+      '${dir.path}/${codigo}_${timestamp}_local.jpg',
+    );
+
+    if (mounted) {
+      setState(() {
+        itens.add(
+          _ItemLote(
+            codigo: codigo,
+            transportadora: transportadora,
+            foto: fotoPacoteSalva,
+            fotoLocal: fotoLocalSalva,
+          ),
+        );
+        codigosNoLote.add(codigo);
+      });
+    }
+
+    await _voltarAoScanner();
   }
 
   void _reiniciarScanner() {
@@ -226,7 +256,7 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
     });
   }
 
-  Future<void> _confirmarFinalizacao() async {
+  Future<void> _abrirConfirmacao() async {
     if (itens.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -236,36 +266,19 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
       return;
     }
 
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Confirmar entrega em lote?'),
-          content: Text(
-            '${itens.length} pacote(s) serão marcados como entregues '
-            'para "${nomeController.text.trim()}".',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Continuar bipando'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Confirmar'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmar != true) return;
-
     final controladorAtual = controller;
-    setState(() => controller = null);
+    setState(() {
+      controller = null;
+      confirmando = true;
+    });
     await controladorAtual?.dispose();
+  }
 
-    await _salvarLote();
+  void _voltarParaScannerDaConfirmacao() {
+    setState(() {
+      confirmando = false;
+      controller = _novoScannerController();
+    });
   }
 
   Future<void> _salvarLote() async {
@@ -298,6 +311,11 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
           'fotoUrl': null,
           'fotoServerPath': null,
           'fotoSincronizada': false,
+
+          'fotoPath2': item.fotoLocal.path,
+          'fotoUrl2': null,
+          'fotoServerPath2': null,
+          'fotoSincronizada2': false,
 
           'lat': lat,
           'lng': lng,
@@ -340,6 +358,7 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
           dataLeitura: DateTime.now(),
           nomeRecebedor: nomeRecebedor,
           fotoPath: item.foto.path,
+          fotoPath2: item.fotoLocal.path,
           lat: lat,
           lng: lng,
           entregue: true,
@@ -370,6 +389,7 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
 
   Widget _telaNome() {
     final gpsOk = lat != null && lng != null;
+    final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Entrega em massa')),
@@ -378,17 +398,33 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Quem vai receber os pacotes?',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colors.primaryContainer,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(Icons.dynamic_feed, color: colors.onPrimaryContainer),
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Text(
+                    'Bipe vários pacotes seguidos pro mesmo recebedor e local',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'Esse nome e a localização atual valem para todos os pacotes '
-              'bipados neste lote. A foto continua sendo tirada uma por pacote.',
-              style: TextStyle(fontSize: 13),
+            const SizedBox(height: 10),
+            Text(
+              'O nome do recebedor e a localização valem pra todo o lote. '
+              'Cada pacote continua tirando as duas fotos de sempre — a do '
+              'pacote e a do local de entrega.',
+              style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             TextField(
               controller: nomeController,
               autofocus: true,
@@ -396,31 +432,39 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
               decoration: const InputDecoration(
                 labelText: 'Nome de quem recebeu',
                 border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.person_outline),
               ),
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(
-                  gpsOk ? Icons.check_circle : Icons.location_searching,
-                  color: gpsOk ? Colors.green : Colors.orange,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    gpsOk ? 'GPS OK' : 'GPS não disponível (não impede de começar)',
-                    style: const TextStyle(fontSize: 13),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    gpsOk ? Icons.check_circle : Icons.location_searching,
+                    color: gpsOk ? Colors.green : Colors.orange,
+                    size: 20,
                   ),
-                ),
-                if (!gpsOk)
-                  TextButton(
-                    onPressed: _pegarGPS,
-                    child: const Text('Tentar de novo'),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      gpsOk ? 'GPS OK' : 'GPS não disponível (não impede de começar)',
+                      style: const TextStyle(fontSize: 13),
+                    ),
                   ),
-              ],
+                  if (!gpsOk)
+                    TextButton(
+                      onPressed: _pegarGPS,
+                      child: const Text('Tentar de novo'),
+                    ),
+                ],
+              ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -441,120 +485,106 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
   Widget _telaScanner() {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: salvando
-          ? const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(color: Colors.white),
-                  SizedBox(height: 16),
-                  Text(
-                    'Salvando lote...',
-                    style: TextStyle(color: Colors.white),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (controller != null)
+            MobileScanner(
+              // Key nova a cada recriação força o mobile_scanner a
+              // desmontar e montar a view nativa do zero, em vez de
+              // tentar reaproveitar uma sessão de câmera antiga.
+              key: ValueKey(_scannerGeracao),
+              controller: controller!,
+              onDetect: _onDetect,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.no_photography,
+                          color: Colors.white,
+                          size: 48,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Não foi possível abrir a câmera: '
+                          '${error.errorCode.name}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        const SizedBox(height: 20),
+                        ElevatedButton(
+                          onPressed: _reiniciarScanner,
+                          child: const Text('Tentar novamente'),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
+                );
+              },
             )
-          : Stack(
-              fit: StackFit.expand,
+          else
+            const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            ),
+          SafeArea(
+            child: Column(
               children: [
-                if (controller != null)
-                  MobileScanner(
-                    // Key nova a cada recriação força o mobile_scanner a
-                    // desmontar e montar a view nativa do zero, em vez de
-                    // tentar reaproveitar uma sessão de câmera antiga.
-                    key: ValueKey(_scannerGeracao),
-                    controller: controller!,
-                    onDetect: _onDetect,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.no_photography,
-                                color: Colors.white,
-                                size: 48,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Não foi possível abrir a câmera: '
-                                '${error.errorCode.name}',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(color: Colors.white),
-                              ),
-                              const SizedBox(height: 20),
-                              ElevatedButton(
-                                onPressed: _reiniciarScanner,
-                                child: const Text('Tentar novamente'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  )
-                else
-                  const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
-                  ),
-                SafeArea(
-                  child: Column(
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: Row(
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                        child: Row(
-                          children: [
-                            _BotaoCircularLote(
-                              icon: Icons.close,
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.55),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Text(
-                                  '${itens.length} pacote(s) — ${nomeController.text.trim()}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                      _BotaoCircularLote(
+                        icon: Icons.close,
+                        onPressed: () => Navigator.pop(context),
                       ),
-                      const Spacer(),
-                      if (itens.isNotEmpty) _tiraListaEscaneados(),
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: 52,
-                          child: FilledButton.icon(
-                            onPressed: _confirmarFinalizacao,
-                            icon: const Icon(Icons.check),
-                            label: Text('Finalizar lote (${itens.length})'),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            '${itens.length} pacote(s) — ${nomeController.text.trim()}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
+                const Spacer(),
+                if (itens.isNotEmpty) _tiraListaEscaneados(),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: FilledButton.icon(
+                      onPressed: _abrirConfirmacao,
+                      icon: const Icon(Icons.playlist_add_check),
+                      label: Text('Revisar e finalizar (${itens.length})'),
+                    ),
+                  ),
+                ),
               ],
             ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -606,8 +636,166 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
     );
   }
 
+  Widget _telaConfirmacao() {
+    final colors = Theme.of(context).colorScheme;
+    final nomeRecebedor = nomeController.text.trim();
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop || salvando) return;
+        _voltarParaScannerDaConfirmacao();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Conferir lote'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: salvando ? null : _voltarParaScannerDaConfirmacao,
+          ),
+        ),
+        body: salvando
+            ? const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Salvando lote...'),
+                  ],
+                ),
+              )
+            : Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: colors.primaryContainer,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.inventory_2, color: colors.onPrimaryContainer),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${itens.length} pacote${itens.length == 1 ? '' : 's'} '
+                                'pronto${itens.length == 1 ? '' : 's'} pra finalizar',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: colors.onPrimaryContainer,
+                                ),
+                              ),
+                              Text(
+                                'Recebedor: ${nomeRecebedor.isEmpty ? '—' : nomeRecebedor}',
+                                style: TextStyle(color: colors.onPrimaryContainer),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: itens.isEmpty
+                        ? Center(
+                            child: Text(
+                              'Nenhum pacote no lote',
+                              style: TextStyle(color: colors.onSurfaceVariant),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            itemCount: itens.length,
+                            separatorBuilder: (_, _) => const SizedBox(height: 10),
+                            itemBuilder: (context, index) {
+                              final item = itens[index];
+
+                              return Material(
+                                color: colors.surfaceContainerLow,
+                                borderRadius: BorderRadius.circular(16),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(10),
+                                  child: Row(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: Image.file(
+                                          item.foto,
+                                          width: 52,
+                                          height: 52,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: Image.file(
+                                          item.fotoLocal,
+                                          width: 52,
+                                          height: 52,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              item.codigo,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              item.transportadora,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: colors.onSurfaceVariant,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline),
+                                        onPressed: () => _removerItem(index),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton.icon(
+                        onPressed: itens.isEmpty ? null : _salvarLote,
+                        icon: const Icon(Icons.check_circle_outline),
+                        label: Text('Confirmar entrega (${itens.length})'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (confirmando) return _telaConfirmacao();
     return escaneando ? _telaScanner() : _telaNome();
   }
 }

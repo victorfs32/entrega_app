@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'firebase_options.dart';
 import 'scanner_page.dart';
@@ -14,7 +13,6 @@ import 'menu_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/atualizacao_service.dart';
 import 'services/atualizacao_dialog.dart';
-import 'services/rastreio_service.dart';
 import 'services/sincronizacao_fotos_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'app_theme.dart';
@@ -26,11 +24,6 @@ List<Pacote> listaPacotes = [];
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Porta de comunicação entre o serviço de rastreio (isolate separada) e
-  // a UI principal — exigido pelo flutter_foreground_task antes de
-  // qualquer outra chamada ao plugin.
-  FlutterForegroundTask.initCommunicationPort();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
@@ -199,8 +192,6 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   double valorPacote = 3.0;
   bool carregando = true;
-  bool servicoRastreioAtivo = false;
-  bool alternandoServicoRastreio = false;
   String _iniciais(String nome) {
     final partes = nome.trim().split(' ').where((e) => e.isNotEmpty).toList();
 
@@ -374,53 +365,11 @@ class _HomePageState extends State<HomePage> {
     super.initState();
 
     _carregarEntregasFirebase();
-    _sincronizarEstadoServicoRastreio();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _verificarAtualizacao();
       _sincronizarFotosEmSegundoPlano();
     });
-  }
-
-  // Cobre o caso do app ter sido morto e reaberto com o serviço de
-  // rastreio ainda rodando em segundo plano — o switch não pode voltar
-  // desligado só porque a UI recarregou.
-  Future<void> _sincronizarEstadoServicoRastreio() async {
-    final ativo = await RastreioService.servicoAtivo();
-    if (!mounted) return;
-    setState(() => servicoRastreioAtivo = ativo);
-  }
-
-  Future<void> _alternarServicoRastreio(bool ligar) async {
-    setState(() => alternandoServicoRastreio = true);
-
-    try {
-      if (ligar) {
-        final ok = await RastreioService.iniciarServico();
-
-        if (!mounted) return;
-
-        if (!ok) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Permissão de localização negada. Sem ela não é possível '
-                'ligar o rastreio.',
-              ),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-
-        setState(() => servicoRastreioAtivo = ok);
-      } else {
-        await RastreioService.pararServico();
-        if (!mounted) return;
-        setState(() => servicoRastreioAtivo = false);
-      }
-    } finally {
-      if (mounted) setState(() => alternandoServicoRastreio = false);
-    }
   }
 
   // Roda em segundo plano, sem diálogo nem snackbar: envia fotos de
@@ -706,56 +655,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _cardRastreio() {
-    final colors = Theme.of(context).colorScheme;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          children: [
-            Icon(
-              servicoRastreioAtivo
-                  ? Icons.location_on
-                  : Icons.location_off_outlined,
-              color: servicoRastreioAtivo ? colors.primary : colors.outline,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    servicoRastreioAtivo
-                        ? 'Rastreio do turno ativo'
-                        : 'Rastreio do turno desligado',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    servicoRastreioAtivo
-                        ? 'O cliente acompanha suas entregas em rota ao vivo.'
-                        : 'Ligue pra compartilhar a localização das entregas com o cliente.',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            alternandoServicoRastreio
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Switch(
-                    value: servicoRastreioAtivo,
-                    onChanged: _alternarServicoRastreio,
-                  ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final hoje = DateTime.now();
@@ -827,10 +726,6 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ],
                     ),
-
-                    const SizedBox(height: 20),
-
-                    _cardRastreio(),
 
                     const SizedBox(height: 20),
 
