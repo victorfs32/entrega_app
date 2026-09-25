@@ -210,8 +210,11 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
       return;
     }
 
-    // Mesma margem de segurança entre as duas aberturas de câmera seguidas.
-    await Future.delayed(const Duration(milliseconds: 300));
+    // Essa troca é a mais arriscada de todas: duas câmeras de foto abrindo
+    // em sequência direta, sem o scanner no meio pra dar folga. 600ms pra
+    // igualar a margem usada nas outras trocas (era só 300ms antes, curto
+    // demais pro hardware de alguns aparelhos liberar a sessão anterior).
+    await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
 
     final fotoLocal = await _abrirCamera('Foto do local da entrega');
