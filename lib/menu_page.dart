@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_theme.dart';
 import 'assinatura_gate.dart';
 import 'entregas_page.dart';
 import 'financeiro_page.dart';
@@ -132,11 +133,18 @@ class _MenuPageState extends State<MenuPage> {
     required String titulo,
     required String subtitulo,
     required VoidCallback? onTap,
-    Color iconColor = Colors.blue,
+    int cor = 0,
   }) {
     return Card(
       child: ListTile(
-        leading: Icon(icon, size: 32, color: iconColor),
+        leading: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: context.accentColors.container(cor),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, size: 26, color: context.accentColors.onContainer(cor)),
+        ),
         title: Text(
           titulo,
           style: const TextStyle(fontWeight: FontWeight.bold),
@@ -170,7 +178,7 @@ class _MenuPageState extends State<MenuPage> {
               icon: Icons.person,
               titulo: 'Meu Perfil',
               subtitulo: 'Ver dados do motorista logado',
-              iconColor: Colors.deepPurple,
+              cor: 0,
               onTap: () {
                 Navigator.push(
                   context,
@@ -182,13 +190,14 @@ class _MenuPageState extends State<MenuPage> {
               icon: Icons.list_alt,
               titulo: 'Entregas',
               subtitulo: 'Ver pacotes entregues',
+              cor: 1,
               onTap: () => _abrirEntregas(context),
             ),
             _itemMenu(
               icon: Icons.dynamic_feed,
               titulo: 'Entrega em massa',
               subtitulo: 'Bipar vários pacotes seguidos, com foto de cada um',
-              iconColor: Colors.teal,
+              cor: 2,
               onTap: () async {
                 final liberado = await verificarAcessoLiberado(context);
                 if (!liberado || !context.mounted) return;
@@ -214,6 +223,7 @@ class _MenuPageState extends State<MenuPage> {
               icon: Icons.bar_chart,
               titulo: 'Relatórios',
               subtitulo: 'Ganhos por dia e por semana',
+              cor: 3,
               onTap: () {
                 Navigator.push(
                   context,
@@ -225,7 +235,7 @@ class _MenuPageState extends State<MenuPage> {
               icon: Icons.account_balance_wallet,
               titulo: 'Financeiro',
               subtitulo: 'Quanto já ganhei, recebi e ainda falta receber',
-              iconColor: Colors.orange,
+              cor: 4,
               onTap: () {
                 Navigator.push(
                   context,
@@ -239,13 +249,14 @@ class _MenuPageState extends State<MenuPage> {
               subtitulo: sincronizando
                   ? progresso
                   : 'Enviar minhas fotos pendentes para o Google Drive',
-              iconColor: Colors.green,
+              cor: 5,
               onTap: sincronizando ? null : _sincronizarFotosManual,
             ),
             _itemMenu(
               icon: Icons.settings,
               titulo: 'Configurações',
               subtitulo: 'Ajustes do aplicativo',
+              cor: 0,
               onTap: () {
                 Navigator.push(
                   context,
@@ -257,6 +268,7 @@ class _MenuPageState extends State<MenuPage> {
               icon: Icons.info,
               titulo: 'Sobre o app',
               subtitulo: 'Informações do Baixa Fácil',
+              cor: 1,
               onTap: () {},
             ),
           ],

@@ -91,6 +91,60 @@ extension AppSemanticColorsX on BuildContext {
       Theme.of(this).extension<AppSemanticColors>()!;
 }
 
+/// Paleta de cores de destaque (fundo + conteúdo) pra dar identidade visual
+/// própria a cada card/ícone repetido pela tela — Home, Relatórios, Menu —
+/// em vez de tudo sair na mesma variação de azul só porque o Material 3
+/// deriva primary/secondary/tertiaryContainer de uma única cor-semente.
+/// Cada dupla já se adapta sozinha entre light/dark, igual AppSemanticColors.
+class AppAccentColors extends ThemeExtension<AppAccentColors> {
+  const AppAccentColors(this.pares);
+
+  final List<(Color container, Color onContainer)> pares;
+
+  Color container(int indice) => pares[indice % pares.length].$1;
+  Color onContainer(int indice) => pares[indice % pares.length].$2;
+
+  static const _light = AppAccentColors([
+    (Color(0xFFD9E7FF), Color(0xFF0C3C78)), // azul
+    (Color(0xFFEBDDFF), Color(0xFF4A2A82)), // roxo
+    (Color(0xFFD3F3DE), Color(0xFF0F6B37)), // verde
+    (Color(0xFFFFE4C2), Color(0xFF8A4A00)), // laranja
+    (Color(0xFFFFDCEA), Color(0xFF8C1D49)), // rosa
+    (Color(0xFFCFF2F2), Color(0xFF0B5D5F)), // ciano
+  ]);
+
+  static const _dark = AppAccentColors([
+    (Color(0xFF203C63), Color(0xFFC3DAFF)), // azul
+    (Color(0xFF3B2A5C), Color(0xFFE4D3FF)), // roxo
+    (Color(0xFF13402A), Color(0xFFB2EFC6)), // verde
+    (Color(0xFF5B3A0A), Color(0xFFFFD3A0)), // laranja
+    (Color(0xFF5C1D3B), Color(0xFFFFC3DB)), // rosa
+    (Color(0xFF0E4041), Color(0xFFA9E9E9)), // ciano
+  ]);
+
+  @override
+  AppAccentColors copyWith({List<(Color, Color)>? pares}) {
+    return AppAccentColors(pares ?? this.pares);
+  }
+
+  @override
+  AppAccentColors lerp(ThemeExtension<AppAccentColors>? other, double t) {
+    if (other is! AppAccentColors) return this;
+
+    return AppAccentColors([
+      for (var i = 0; i < pares.length; i++)
+        (
+          Color.lerp(pares[i].$1, other.pares[i].$1, t)!,
+          Color.lerp(pares[i].$2, other.pares[i].$2, t)!,
+        ),
+    ]);
+  }
+}
+
+extension AppAccentColorsX on BuildContext {
+  AppAccentColors get accentColors => Theme.of(this).extension<AppAccentColors>()!;
+}
+
 class AppTheme {
   // Azul da marca (assets/branding/baixa_facil_mark.svg).
   static const Color _seedColor = Color(0xFF1673D1);
@@ -104,6 +158,7 @@ class AppTheme {
         brightness: Brightness.light,
       ),
       AppSemanticColors._light,
+      AppAccentColors._light,
     );
   }
 
@@ -114,18 +169,20 @@ class AppTheme {
         brightness: Brightness.dark,
       ),
       AppSemanticColors._dark,
+      AppAccentColors._dark,
     );
   }
 
   static ThemeData _build(
     ColorScheme colorScheme,
     AppSemanticColors semanticColors,
+    AppAccentColors accentColors,
   ) {
     final theme = ThemeData(colorScheme: colorScheme, useMaterial3: true);
     final borderRadius = BorderRadius.circular(_radius);
 
     return theme.copyWith(
-      extensions: [semanticColors],
+      extensions: [semanticColors, accentColors],
       scaffoldBackgroundColor: colorScheme.surface,
       visualDensity: VisualDensity.comfortable,
       dividerTheme: DividerThemeData(

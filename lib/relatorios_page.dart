@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'app_theme.dart';
 import 'main.dart';
 
 class _DiaEntregas {
@@ -140,8 +141,8 @@ class RelatoriosPage extends StatelessWidget {
                       child: _TileRelatorio(
                         valor: '$entreguesOntem',
                         titulo: 'Ontem',
-                        backgroundColor: colors.secondaryContainer,
-                        foregroundColor: colors.onSecondaryContainer,
+                        backgroundColor: context.accentColors.container(3),
+                        foregroundColor: context.accentColors.onContainer(3),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -149,8 +150,8 @@ class RelatoriosPage extends StatelessWidget {
                       child: _TileRelatorio(
                         valor: '$entreguesHoje',
                         titulo: 'Hoje',
-                        backgroundColor: colors.primaryContainer,
-                        foregroundColor: colors.onPrimaryContainer,
+                        backgroundColor: context.accentColors.container(2),
+                        foregroundColor: context.accentColors.onContainer(2),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -158,8 +159,8 @@ class RelatoriosPage extends StatelessWidget {
                       child: _TileRelatorio(
                         valor: '$entreguesMes',
                         titulo: 'Mês',
-                        backgroundColor: colors.tertiaryContainer,
-                        foregroundColor: colors.onTertiaryContainer,
+                        backgroundColor: context.accentColors.container(1),
+                        foregroundColor: context.accentColors.onContainer(1),
                       ),
                     ),
                   ],
@@ -180,8 +181,8 @@ class RelatoriosPage extends StatelessWidget {
                       child: _TileRelatorio(
                         valor: 'R\$ ${_formatarDinheiro(ganhoHoje)}',
                         titulo: 'Hoje',
-                        backgroundColor: colors.secondaryContainer,
-                        foregroundColor: colors.onSecondaryContainer,
+                        backgroundColor: context.accentColors.container(3),
+                        foregroundColor: context.accentColors.onContainer(3),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -189,8 +190,8 @@ class RelatoriosPage extends StatelessWidget {
                       child: _TileRelatorio(
                         valor: 'R\$ ${_formatarDinheiro(ganhoSemana)}',
                         titulo: 'Semana',
-                        backgroundColor: colors.primaryContainer,
-                        foregroundColor: colors.onPrimaryContainer,
+                        backgroundColor: context.accentColors.container(2),
+                        foregroundColor: context.accentColors.onContainer(2),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -198,8 +199,8 @@ class RelatoriosPage extends StatelessWidget {
                       child: _TileRelatorio(
                         valor: 'R\$ ${_formatarDinheiro(ganhoMes)}',
                         titulo: 'Mês',
-                        backgroundColor: colors.tertiaryContainer,
-                        foregroundColor: colors.onTertiaryContainer,
+                        backgroundColor: context.accentColors.container(1),
+                        foregroundColor: context.accentColors.onContainer(1),
                       ),
                     ),
                   ],
