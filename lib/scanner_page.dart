@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import 'RegistrarEntregaPage.dart';
+import 'registrar_entrega_page.dart';
 import 'services/entrega_status_service.dart';
 import 'utils/codigo_rastreio.dart';
 

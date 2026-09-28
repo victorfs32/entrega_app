@@ -91,10 +91,13 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
 
     if (novoValor == null) return;
 
+    final usuario = FirebaseAuth.instance.currentUser;
+    if (usuario == null) return;
+
     try {
       await FirebaseFirestore.instance
           .collection('motoristas')
-          .doc(FirebaseAuth.instance.currentUser!.uid)
+          .doc(usuario.uid)
           .update({'valorPacote': novoValor});
 
       if (!mounted) return;

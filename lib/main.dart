@@ -218,10 +218,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _topoUsuarioConteudo(bool assinaturaAtiva, int diasTeste) {
+    final usuario = FirebaseAuth.instance.currentUser;
+    if (usuario == null) return const SizedBox.shrink();
+
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance
           .collection('motoristas')
-          .doc(FirebaseAuth.instance.currentUser!.uid)
+          .doc(usuario.uid)
           .get(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
@@ -398,7 +401,13 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _carregarEntregasFirebase() async {
     try {
-      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final usuario = FirebaseAuth.instance.currentUser;
+      if (usuario == null) {
+        if (!mounted) return;
+        setState(() => carregando = false);
+        return;
+      }
+      final uid = usuario.uid;
 
       final snapshot = await FirebaseFirestore.instance
           .collection('entregas')

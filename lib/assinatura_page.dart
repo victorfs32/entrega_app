@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -32,10 +34,36 @@ class _AssinaturaPageState extends State<AssinaturaPage> {
   Uint8List? qrCodeBytes;
   num valor = 10;
 
+  StreamSubscription<DocumentSnapshot>? _assinaturaSubscription;
+
   @override
   void initState() {
     super.initState();
     _gerarCobranca();
+    _ouvirConfirmacaoPagamento();
+  }
+
+  @override
+  void dispose() {
+    _assinaturaSubscription?.cancel();
+    super.dispose();
+  }
+
+  // Fica ouvindo o proprio documento do motorista: quando o webhook do
+  // Mercado Pago confirma o Pix e grava pagoAte no futuro, fecha a tela
+  // sozinha em vez de deixar o motorista preso em "Aguardando confirmação".
+  void _ouvirConfirmacaoPagamento() {
+    _assinaturaSubscription = FirebaseFirestore.instance
+        .collection('motoristas')
+        .doc(widget.motoristaId)
+        .snapshots()
+        .listen((snap) {
+      final pagoAte = (snap.data()?['pagoAte'] as Timestamp?)?.toDate();
+      if (pagoAte != null && pagoAte.isAfter(DateTime.now())) {
+        if (!mounted) return;
+        Navigator.of(context).pop(true);
+      }
+    });
   }
 
   Future<void> _gerarCobranca() async {

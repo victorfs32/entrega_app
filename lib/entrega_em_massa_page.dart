@@ -18,20 +18,23 @@ class _ItemLote {
   final String codigo;
   final String transportadora;
   final File foto;
-  final File fotoLocal;
 
   _ItemLote({
     required this.codigo,
     required this.transportadora,
     required this.foto,
-    required this.fotoLocal,
   });
 }
 
 /// Bipa vários pacotes em sequência para o mesmo recebedor/local, tirando
-/// duas fotos por pacote (do pacote e do local de entrega) — só o nome do
-/// recebedor e o GPS são compartilhados pelo lote. Antes de salvar, mostra
-/// uma tela de conferência com a lista completa e o total de pacotes.
+/// uma foto por pacote — só o nome do recebedor e o GPS são compartilhados
+/// pelo lote. Antes de salvar, mostra uma tela de conferência com a lista
+/// completa e o total de pacotes.
+///
+/// Chegou a tirar duas fotos por pacote (a do pacote e a do local de
+/// entrega), mas isso dobrava as trocas de câmera em sequência na baixa em
+/// massa e voltou a causar o erro de câmera mesmo com as pausas de
+/// segurança — voltado pra uma foto só a pedido do usuário.
 class EntregaEmMassaPage extends StatefulWidget {
   const EntregaEmMassaPage({super.key});
 
@@ -210,26 +213,9 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
       return;
     }
 
-    // Essa troca é a mais arriscada de todas: duas câmeras de foto abrindo
-    // em sequência direta, sem o scanner no meio pra dar folga. 600ms pra
-    // igualar a margem usada nas outras trocas (era só 300ms antes, curto
-    // demais pro hardware de alguns aparelhos liberar a sessão anterior).
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-
-    final fotoLocal = await _abrirCamera('Foto do local da entrega');
-
-    if (fotoLocal == null || !mounted) {
-      await _voltarAoScanner();
-      return;
-    }
-
     final dir = await _fotosDir();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final fotoPacoteSalva = await fotoPacote.copy('${dir.path}/${codigo}_$timestamp.jpg');
-    final fotoLocalSalva = await fotoLocal.copy(
-      '${dir.path}/${codigo}_${timestamp}_local.jpg',
-    );
 
     if (mounted) {
       setState(() {
@@ -238,7 +224,6 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
             codigo: codigo,
             transportadora: transportadora,
             foto: fotoPacoteSalva,
-            fotoLocal: fotoLocalSalva,
           ),
         );
         codigosNoLote.add(codigo);
@@ -315,11 +300,6 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
           'fotoServerPath': null,
           'fotoSincronizada': false,
 
-          'fotoPath2': item.fotoLocal.path,
-          'fotoUrl2': null,
-          'fotoServerPath2': null,
-          'fotoSincronizada2': false,
-
           'lat': lat,
           'lng': lng,
 
@@ -361,7 +341,6 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
           dataLeitura: DateTime.now(),
           nomeRecebedor: nomeRecebedor,
           fotoPath: item.foto.path,
-          fotoPath2: item.fotoLocal.path,
           lat: lat,
           lng: lng,
           entregue: true,
@@ -423,8 +402,7 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
             const SizedBox(height: 10),
             Text(
               'O nome do recebedor e a localização valem pra todo o lote. '
-              'Cada pacote continua tirando as duas fotos de sempre — a do '
-              'pacote e a do local de entrega.',
+              'Cada pacote continua tirando a foto de sempre.',
               style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant),
             ),
             const SizedBox(height: 20),
@@ -730,16 +708,6 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
                                         borderRadius: BorderRadius.circular(10),
                                         child: Image.file(
                                           item.foto,
-                                          width: 52,
-                                          height: 52,
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(10),
-                                        child: Image.file(
-                                          item.fotoLocal,
                                           width: 52,
                                           height: 52,
                                           fit: BoxFit.cover,
