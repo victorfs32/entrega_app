@@ -141,7 +141,8 @@ class _AuthCheckPageState extends State<AuthCheckPage> {
           .get();
 
       if (motoristaDoc.data()?['ativo'] == false) {
-        _mensagemBloqueio = 'Sua conta está bloqueada. Fale com o administrador.';
+        _mensagemBloqueio =
+            'Sua conta está bloqueada. Fale com o administrador.';
         await FirebaseAuth.instance.signOut();
         return false;
       }
@@ -192,6 +193,15 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   double valorPacote = 3.0;
   bool carregando = true;
+
+  // Contagem de todas as entregas já feitas, buscada à parte via
+  // count() do Firestore (não baixa os documentos, só o número) — antes
+  // isso era `listaPacotes.where((p) => p.entregue).length`, mas
+  // listaPacotes só tem o que já foi carregado na tela, então "Total
+  // Baixas" ficava incorreto/lento conforme o histórico do motorista
+  // cresce. Nulo enquanto ainda não voltou a 1ª vez.
+  int? totalBaixasGeral;
+
   String _iniciais(String nome) {
     final partes = nome.trim().split(' ').where((e) => e.isNotEmpty).toList();
 
@@ -208,9 +218,11 @@ class _HomePageState extends State<HomePage> {
           .doc('app')
           .get(),
       builder: (context, configSnapshot) {
-        final configDados = configSnapshot.data?.data() as Map<String, dynamic>?;
+        final configDados =
+            configSnapshot.data?.data() as Map<String, dynamic>?;
         final assinaturaAtiva = configDados?['assinaturaAtiva'] == true;
-        final diasTeste = (configDados?['diasTesteGratis'] as num?)?.toInt() ?? 0;
+        final diasTeste =
+            (configDados?['diasTesteGratis'] as num?)?.toInt() ?? 0;
 
         return _topoUsuarioConteudo(assinaturaAtiva, diasTeste);
       },
@@ -307,8 +319,10 @@ class _HomePageState extends State<HomePage> {
     String texto;
 
     if (!emDia && diasTeste > 0 && criadoEm != null) {
-      final diasRestantesTeste =
-          criadoEm.add(Duration(days: diasTeste)).difference(DateTime.now()).inDays;
+      final diasRestantesTeste = criadoEm
+          .add(Duration(days: diasTeste))
+          .difference(DateTime.now())
+          .inDays;
 
       if (diasRestantesTeste >= 0) {
         cor = semanticColors.info;
@@ -353,11 +367,7 @@ class _HomePageState extends State<HomePage> {
       ),
       child: Text(
         texto,
-        style: TextStyle(
-          color: cor,
-          fontWeight: FontWeight.bold,
-          fontSize: 11,
-        ),
+        style: TextStyle(color: cor, fontWeight: FontWeight.bold, fontSize: 11),
         textAlign: TextAlign.right,
       ),
     );
@@ -368,11 +378,32 @@ class _HomePageState extends State<HomePage> {
     super.initState();
 
     _carregarEntregasFirebase();
+    _carregarTotalBaixasGeral();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _verificarAtualizacao();
       _sincronizarFotosEmSegundoPlano();
     });
+  }
+
+  Future<void> _carregarTotalBaixasGeral() async {
+    final usuario = FirebaseAuth.instance.currentUser;
+    if (usuario == null) return;
+
+    try {
+      final agregada = await FirebaseFirestore.instance
+          .collection('entregas')
+          .where('motoristaId', isEqualTo: usuario.uid)
+          .where('entregue', isEqualTo: true)
+          .count()
+          .get();
+
+      if (!mounted) return;
+      setState(() => totalBaixasGeral = agregada.count ?? 0);
+    } catch (_) {
+      // Sem conseguir a contagem agregada, o card cai de volta pro que já
+      // está carregado em listaPacotes (ver build()) — não é crítico.
+    }
   }
 
   // Roda em segundo plano, sem diálogo nem snackbar: envia fotos de
@@ -562,14 +593,21 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(width: 10),
           Expanded(child: Text(texto)),
           if (onTap != null)
-            Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.outline),
+            Icon(
+              Icons.chevron_right,
+              color: Theme.of(context).colorScheme.outline,
+            ),
         ],
       ),
     );
 
     if (onTap == null) return linha;
 
-    return InkWell(borderRadius: BorderRadius.circular(10), onTap: onTap, child: linha);
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: linha,
+    );
   }
 
   Widget _resumoDoDia({
@@ -592,9 +630,9 @@ class _HomePageState extends State<HomePage> {
           children: [
             Text(
               'Resumo do dia',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
 
             const SizedBox(height: 16),
@@ -609,8 +647,7 @@ class _HomePageState extends State<HomePage> {
 
             _linhaResumo(
               icon: Icons.payments_outlined,
-              texto:
-                  'R\$ ${ganhoHoje.toStringAsFixed(2).replaceAll('.', ',')}',
+              texto: 'R\$ ${ganhoHoje.toStringAsFixed(2).replaceAll('.', ',')}',
               color: colors.tertiary,
             ),
 
@@ -672,7 +709,8 @@ class _HomePageState extends State<HomePage> {
       return p.entregue && _mesmoDia(p.dataLeitura, hoje);
     }).length;
 
-    final totalBaixas = listaPacotes.where((p) => p.entregue).length;
+    final totalBaixas =
+        totalBaixasGeral ?? listaPacotes.where((p) => p.entregue).length;
     final ganhoHoje = entregasHoje * valorPacote;
 
     final ultimasEntregas = listaPacotes
@@ -710,7 +748,9 @@ class _HomePageState extends State<HomePage> {
                             titulo: 'Total\nBaixas',
                             valor: '$totalBaixas',
                             backgroundColor: context.accentColors.container(0),
-                            foregroundColor: context.accentColors.onContainer(0),
+                            foregroundColor: context.accentColors.onContainer(
+                              0,
+                            ),
                           ),
                         ),
                         Expanded(
@@ -719,7 +759,9 @@ class _HomePageState extends State<HomePage> {
                             titulo: 'Entregas\nHoje',
                             valor: '$entregasHoje',
                             backgroundColor: context.accentColors.container(1),
-                            foregroundColor: context.accentColors.onContainer(1),
+                            foregroundColor: context.accentColors.onContainer(
+                              1,
+                            ),
                             onTap: _abrirEntregas,
                           ),
                         ),
@@ -730,7 +772,9 @@ class _HomePageState extends State<HomePage> {
                             valor:
                                 'R\$ ${ganhoHoje.toStringAsFixed(2).replaceAll('.', ',')}',
                             backgroundColor: context.accentColors.container(2),
-                            foregroundColor: context.accentColors.onContainer(2),
+                            foregroundColor: context.accentColors.onContainer(
+                              2,
+                            ),
                           ),
                         ),
                       ],
@@ -741,8 +785,8 @@ class _HomePageState extends State<HomePage> {
                     Text(
                       "Últimas Entregas",
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
 
                     const SizedBox(height: 8),

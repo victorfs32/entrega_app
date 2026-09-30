@@ -12,8 +12,32 @@ class _DiaEntregas {
   _DiaEntregas({required this.dia, required this.quantidade});
 }
 
-class RelatoriosPage extends StatelessWidget {
+class RelatoriosPage extends StatefulWidget {
   const RelatoriosPage({super.key});
+
+  @override
+  State<RelatoriosPage> createState() => _RelatoriosPageState();
+}
+
+class _RelatoriosPageState extends State<RelatoriosPage> {
+  // Buscado uma vez só e reaproveitado — antes esse Future era criado
+  // direto dentro do build(), então qualquer rebuild (mudança de tema,
+  // MediaQuery etc.) disparava uma nova consulta ao Firestore e piscava a
+  // tela inteira de novo enquanto ela respondia.
+  Future<DocumentSnapshot>? _motoristaFuture;
+
+  @override
+  void initState() {
+    super.initState();
+
+    final usuario = FirebaseAuth.instance.currentUser;
+    if (usuario != null) {
+      _motoristaFuture = FirebaseFirestore.instance
+          .collection('motoristas')
+          .doc(usuario.uid)
+          .get();
+    }
+  }
 
   bool _mesmoDia(DateTime a, DateTime b) {
     return a.day == b.day && a.month == b.month && a.year == b.year;
@@ -30,19 +54,14 @@ class RelatoriosPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final usuario = FirebaseAuth.instance.currentUser;
+    final motoristaFuture = _motoristaFuture;
 
-    if (usuario == null) {
-      return const Scaffold(
-        body: Center(child: Text('Usuário não logado')),
-      );
+    if (motoristaFuture == null) {
+      return const Scaffold(body: Center(child: Text('Usuário não logado')));
     }
 
     return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('motoristas')
-          .doc(usuario.uid)
-          .get(),
+      future: motoristaFuture,
       builder: (context, snapshot) {
         double valorPacote = 3.00;
 
@@ -119,10 +138,7 @@ class RelatoriosPage extends StatelessWidget {
         final colors = Theme.of(context).colorScheme;
 
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('Relatórios'),
-            centerTitle: true,
-          ),
+          appBar: AppBar(title: const Text('Relatórios'), centerTitle: true),
           body: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -131,8 +147,8 @@ class RelatoriosPage extends StatelessWidget {
                 Text(
                   'Entregas',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -171,8 +187,8 @@ class RelatoriosPage extends StatelessWidget {
                 Text(
                   'Ganhos',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -231,8 +247,8 @@ class RelatoriosPage extends StatelessWidget {
                 Text(
                   'Últimos 7 dias',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Card(
@@ -313,13 +329,18 @@ class _GraficoSemana extends StatelessWidget {
 
   bool _ehHoje(DateTime dia) {
     final hoje = DateTime.now();
-    return dia.day == hoje.day && dia.month == hoje.month && dia.year == hoje.year;
+    return dia.day == hoje.day &&
+        dia.month == hoje.month &&
+        dia.year == hoje.year;
   }
 
   @override
   Widget build(BuildContext context) {
     const alturaMax = 90.0;
-    final maior = dias.fold<int>(0, (a, d) => d.quantidade > a ? d.quantidade : a);
+    final maior = dias.fold<int>(
+      0,
+      (a, d) => d.quantidade > a ? d.quantidade : a,
+    );
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,

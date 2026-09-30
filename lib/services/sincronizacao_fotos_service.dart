@@ -7,6 +7,28 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
+/// Processa [itens] com no máximo [concorrencia] tarefas rodando ao mesmo
+/// tempo — cada "worker" pega o próximo item disponível assim que termina o
+/// anterior, até a lista acabar. Mais rápido que processar um por um em
+/// sequência, sem disparar todos de uma vez.
+Future<void> _executarEmParalelo<T>(
+  List<T> itens,
+  Future<void> Function(T item) tarefa, {
+  required int concorrencia,
+}) async {
+  var indice = 0;
+
+  Future<void> worker() async {
+    while (indice < itens.length) {
+      final atual = itens[indice];
+      indice++;
+      await tarefa(atual);
+    }
+  }
+
+  await Future.wait(List.generate(concorrencia, (_) => worker()));
+}
+
 class ResultadoSincronizacao {
   final int totalEncontradas;
   final int totalEnviadas;
@@ -247,16 +269,25 @@ class SincronizacaoFotosService {
       final totalIgnoradas = entregas.length - pendentes.length;
       onInicio?.call(totalEncontradas, totalIgnoradas);
 
-      for (final doc in pendentes) {
+      // Até 3 fotos enviando ao mesmo tempo em vez de uma por vez em
+      // sequência. Isso roda automaticamente toda vez que o app abre (ver
+      // main.dart), então uma fila grande de fotos pendentes (ex: motorista
+      // voltou de uma área sem sinal) deixava o app competindo por CPU e
+      // rede por bastante tempo logo na abertura. Um limite de 3 em vez de
+      // mandar todas de uma vez evita sobrecarregar conexões ruins de
+      // campo.
+      await _executarEmParalelo(pendentes, concorrencia: 3, (doc) async {
         final dados = doc.data();
-
         final codigo = _texto(dados['codigo']);
 
         if (codigo.isEmpty) {
-          await _marcarErro(doc.reference, 'Entrega sem código para sincronizar');
+          await _marcarErro(
+            doc.reference,
+            'Entrega sem código para sincronizar',
+          );
           totalErros++;
           onProgresso?.call(totalEnviadas, totalErros);
-          continue;
+          return;
         }
 
         var enviouAlguma = false;
@@ -266,7 +297,10 @@ class SincronizacaoFotosService {
           final fotoPath = _texto(dados['fotoPath']);
 
           if (fotoPath.isEmpty) {
-            await _marcarErro(doc.reference, 'Entrega sem caminho local da foto');
+            await _marcarErro(
+              doc.reference,
+              'Entrega sem caminho local da foto',
+            );
             teveErro = true;
           } else {
             final resultado = await _sincronizarUmaFoto(
@@ -304,7 +338,7 @@ class SincronizacaoFotosService {
         if (enviouAlguma) totalEnviadas++;
         if (teveErro) totalErros++;
         onProgresso?.call(totalEnviadas, totalErros);
-      }
+      });
 
       return ResultadoSincronizacao(
         totalEncontradas: totalEncontradas,

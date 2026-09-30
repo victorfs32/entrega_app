@@ -22,6 +22,13 @@ class _CameraEntregaPageState extends State<CameraEntregaPage>
   bool flashLigado = false;
   String? erro;
 
+  // Evita que duas chamadas de _iniciarCamera() rodem ao mesmo tempo. Sem
+  // isso, um ciclo rápido de pausado->retomado (troca de app, notificação,
+  // diálogo de permissão) podia disparar uma 2ª chamada antes da 1ª
+  // terminar, e a 2ª sobrescrevia `controller` sem nunca dar dispose no
+  // controller antigo já inicializado — vazando a sessão de câmera aberta.
+  bool _iniciandoCamera = false;
+
   @override
   void initState() {
     super.initState();
@@ -46,18 +53,29 @@ class _CameraEntregaPageState extends State<CameraEntregaPage>
 
     if (state == AppLifecycleState.inactive) {
       cameraController.dispose();
-      controller = null;
+      setState(() => controller = null);
     } else if (state == AppLifecycleState.resumed) {
       _iniciarCamera();
     }
   }
 
   Future<void> _iniciarCamera() async {
+    if (_iniciandoCamera) return;
+    _iniciandoCamera = true;
+
     setState(() {
       carregando = true;
       erro = null;
     });
 
+    try {
+      await _tentarAbrirCamera();
+    } finally {
+      _iniciandoCamera = false;
+    }
+  }
+
+  Future<void> _tentarAbrirCamera() async {
     try {
       cameras = await availableCameras();
 

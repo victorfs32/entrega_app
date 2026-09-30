@@ -14,11 +14,13 @@ class ConfiguracoesPage extends StatefulWidget {
 
 class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
   late Future<DocumentSnapshot<Map<String, dynamic>>> _motoristaFuture;
+  late Future<PackageInfo> _packageInfoFuture;
 
   @override
   void initState() {
     super.initState();
     _motoristaFuture = _carregarMotorista();
+    _packageInfoFuture = PackageInfo.fromPlatform();
   }
 
   Future<DocumentSnapshot<Map<String, dynamic>>> _carregarMotorista() {
@@ -41,7 +43,9 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
         return StatefulBuilder(
           builder: (dialogContext, setStateDialog) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
               title: const Text('Valor por pacote'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -50,7 +54,9 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                   TextField(
                     controller: controller,
                     autofocus: true,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(
                       labelText: 'Valor recebido por pacote entregue',
                       prefixText: 'R\$ ',
@@ -112,19 +118,16 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Não foi possível salvar: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Não foi possível salvar: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Configurações'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Configurações'), centerTitle: true),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -189,16 +192,13 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
             const SizedBox(height: 10),
 
             FutureBuilder<PackageInfo>(
-              future: PackageInfo.fromPlatform(),
+              future: _packageInfoFuture,
               builder: (context, snapshot) {
                 final versao = snapshot.data?.version ?? '...';
 
                 return Card(
                   child: ListTile(
-                    leading: const Icon(
-                      Icons.info,
-                      color: Colors.blue,
-                    ),
+                    leading: const Icon(Icons.info, color: Colors.blue),
                     title: const Text('Versão'),
                     subtitle: Text('Baixa Fácil v$versao'),
                   ),

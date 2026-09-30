@@ -175,7 +175,9 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
       await HapticFeedback.heavyImpact();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Pacote $codigoLido já foi entregue anteriormente.')),
+        SnackBar(
+          content: Text('Pacote $codigoLido já foi entregue anteriormente.'),
+        ),
       );
       return;
     }
@@ -215,7 +217,9 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
 
     final dir = await _fotosDir();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final fotoPacoteSalva = await fotoPacote.copy('${dir.path}/${codigo}_$timestamp.jpg');
+    final fotoPacoteSalva = await fotoPacote.copy(
+      '${dir.path}/${codigo}_$timestamp.jpg',
+    );
 
     if (mounted) {
       setState(() {
@@ -269,6 +273,68 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
     });
   }
 
+  Future<Pacote> _salvarItemDoLote({
+    required _ItemLote item,
+    required User usuario,
+    required Map<String, dynamic>? motorista,
+    required String nomeRecebedor,
+  }) async {
+    final dadosEntrega = {
+      'codigo': item.codigo,
+      'transportadora': item.transportadora,
+      'recebedor': nomeRecebedor,
+      'entregue': true,
+
+      'fotoPath': item.foto.path,
+      'fotoUrl': null,
+      'fotoServerPath': null,
+      'fotoSincronizada': false,
+
+      'lat': lat,
+      'lng': lng,
+
+      'dataEntrega': Timestamp.now(),
+
+      'motoristaId': usuario.uid,
+      'motoristaEmail': usuario.email ?? '',
+      'motoristaNome': motorista?['nome'] ?? '',
+      'motoristaTelefone': motorista?['telefone'] ?? '',
+      'motoristaTransportadora':
+          motorista?['transportadora'] ?? item.transportadora,
+    };
+
+    // Filtra também por motoristaId: sem isso, a busca tenta enxergar
+    // entregas de qualquer dono, e a regra do Firestore recusa a consulta
+    // inteira pra quem não é admin (ela não consegue provar que só
+    // voltariam documentos que esse motorista pode ler).
+    final consulta = await FirebaseFirestore.instance
+        .collection('entregas')
+        .where('codigo', isEqualTo: item.codigo)
+        .where('motoristaId', isEqualTo: usuario.uid)
+        .limit(1)
+        .get();
+
+    if (consulta.docs.isNotEmpty) {
+      await consulta.docs.first.reference.update(dadosEntrega);
+    } else {
+      await FirebaseFirestore.instance.collection('entregas').add({
+        ...dadosEntrega,
+        'dataLeitura': Timestamp.now(),
+      });
+    }
+
+    return Pacote(
+      codigo: item.codigo,
+      transportadora: item.transportadora,
+      dataLeitura: DateTime.now(),
+      nomeRecebedor: nomeRecebedor,
+      fotoPath: item.foto.path,
+      lat: lat,
+      lng: lng,
+      entregue: true,
+    );
+  }
+
   Future<void> _salvarLote() async {
     setState(() => salvando = true);
 
@@ -288,62 +354,27 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
 
       final motorista = motoristaDoc.data();
 
-      for (final item in itens) {
-        final dadosEntrega = {
-          'codigo': item.codigo,
-          'transportadora': item.transportadora,
-          'recebedor': nomeRecebedor,
-          'entregue': true,
+      // Um pacote por vez, esperando cada consulta+escrita terminar antes de
+      // ir pro próximo, deixava "Salvando lote..." parado por muito tempo em
+      // lotes grandes (cada item é uma query + um write, sequenciais). Como
+      // cada item tem um código único dentro do lote (garantido por
+      // codigosNoLote ao bipar), não há dependência entre eles — rodar em
+      // paralelo é seguro e corta o tempo total de N vezes o round-trip de
+      // rede pra só um.
+      final pacotesAtualizados = await Future.wait(
+        itens.map(
+          (item) => _salvarItemDoLote(
+            item: item,
+            usuario: usuario,
+            motorista: motorista,
+            nomeRecebedor: nomeRecebedor,
+          ),
+        ),
+      );
 
-          'fotoPath': item.foto.path,
-          'fotoUrl': null,
-          'fotoServerPath': null,
-          'fotoSincronizada': false,
-
-          'lat': lat,
-          'lng': lng,
-
-          'dataEntrega': Timestamp.now(),
-
-          'motoristaId': usuario.uid,
-          'motoristaEmail': usuario.email ?? '',
-          'motoristaNome': motorista?['nome'] ?? '',
-          'motoristaTelefone': motorista?['telefone'] ?? '',
-          'motoristaTransportadora':
-              motorista?['transportadora'] ?? item.transportadora,
-        };
-
-        // Filtra também por motoristaId: sem isso, a busca tenta enxergar
-        // entregas de qualquer dono, e a regra do Firestore recusa a
-        // consulta inteira pra quem não é admin (ela não consegue provar
-        // que só voltariam documentos que esse motorista pode ler).
-        final consulta = await FirebaseFirestore.instance
-            .collection('entregas')
-            .where('codigo', isEqualTo: item.codigo)
-            .where('motoristaId', isEqualTo: usuario.uid)
-            .limit(1)
-            .get();
-
-        if (consulta.docs.isNotEmpty) {
-          await consulta.docs.first.reference.update(dadosEntrega);
-        } else {
-          await FirebaseFirestore.instance.collection('entregas').add({
-            ...dadosEntrega,
-            'dataLeitura': Timestamp.now(),
-          });
-        }
-
-        final index = listaPacotes.indexWhere((p) => p.codigo == item.codigo);
-
-        final pacoteAtualizado = Pacote(
-          codigo: item.codigo,
-          transportadora: item.transportadora,
-          dataLeitura: DateTime.now(),
-          nomeRecebedor: nomeRecebedor,
-          fotoPath: item.foto.path,
-          lat: lat,
-          lng: lng,
-          entregue: true,
+      for (final pacoteAtualizado in pacotesAtualizados) {
+        final index = listaPacotes.indexWhere(
+          (p) => p.codigo == pacoteAtualizado.codigo,
         );
 
         if (index >= 0) {
@@ -388,7 +419,10 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
                     color: colors.primaryContainer,
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(Icons.dynamic_feed, color: colors.onPrimaryContainer),
+                  child: Icon(
+                    Icons.dynamic_feed,
+                    color: colors.onPrimaryContainer,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 const Expanded(
@@ -433,7 +467,9 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      gpsOk ? 'GPS OK' : 'GPS não disponível (não impede de começar)',
+                      gpsOk
+                          ? 'GPS OK'
+                          : 'GPS não disponível (não impede de começar)',
                       style: const TextStyle(fontSize: 13),
                     ),
                   ),
@@ -509,9 +545,7 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
               },
             )
           else
-            const Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            ),
+            const Center(child: CircularProgressIndicator(color: Colors.white)),
           SafeArea(
             child: Column(
               children: [
@@ -579,7 +613,8 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
         separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
           final item = itens[index];
-          final cacheSize = (56 * MediaQuery.devicePixelRatioOf(context)).round();
+          final cacheSize = (56 * MediaQuery.devicePixelRatioOf(context))
+              .round();
 
           return Stack(
             clipBehavior: Clip.none,
@@ -606,7 +641,11 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
                       color: Colors.red,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.close, size: 14, color: Colors.white),
+                    child: const Icon(
+                      Icons.close,
+                      size: 14,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -658,7 +697,10 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.inventory_2, color: colors.onPrimaryContainer),
+                        Icon(
+                          Icons.inventory_2,
+                          color: colors.onPrimaryContainer,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -674,7 +716,9 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
                               ),
                               Text(
                                 'Recebedor: ${nomeRecebedor.isEmpty ? '—' : nomeRecebedor}',
-                                style: TextStyle(color: colors.onPrimaryContainer),
+                                style: TextStyle(
+                                  color: colors.onPrimaryContainer,
+                                ),
                               ),
                             ],
                           ),
@@ -693,9 +737,13 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
                         : ListView.separated(
                             padding: const EdgeInsets.symmetric(horizontal: 14),
                             itemCount: itens.length,
-                            separatorBuilder: (_, _) => const SizedBox(height: 10),
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 10),
                             itemBuilder: (context, index) {
                               final item = itens[index];
+                              final cacheSize =
+                                  (52 * MediaQuery.devicePixelRatioOf(context))
+                                      .round();
 
                               return Material(
                                 color: colors.surfaceContainerLow,
@@ -711,12 +759,15 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
                                           width: 52,
                                           height: 52,
                                           fit: BoxFit.cover,
+                                          cacheWidth: cacheSize,
+                                          cacheHeight: cacheSize,
                                         ),
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               item.codigo,
