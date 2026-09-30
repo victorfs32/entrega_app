@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'app_theme.dart';
 import 'main.dart';
+import 'utils/quinzena.dart' as quinzena;
 
 class _DiaEntregas {
   final DateTime dia;
@@ -89,11 +90,10 @@ class _RelatoriosPageState extends State<RelatoriosPage> {
         final inicioMes = DateTime(agora.year, agora.month, 1);
         final inicioProximoMes = DateTime(agora.year, agora.month + 1, 1);
 
-        final inicioSemana = inicioHoje.subtract(
-          Duration(days: inicioHoje.weekday - 1),
-        );
-
-        final fimSemana = inicioSemana.add(const Duration(days: 7));
+        final inicioQuinzena = quinzena.inicioDaQuinzena(agora);
+        final fimQuinzena = quinzena
+            .fimDaQuinzena(agora)
+            .add(const Duration(days: 1));
 
         final entreguesHoje = listaPacotes.where((p) {
           return p.entregue &&
@@ -111,14 +111,14 @@ class _RelatoriosPageState extends State<RelatoriosPage> {
               p.dataLeitura.isBefore(inicioProximoMes);
         }).length;
 
-        final entreguesSemana = listaPacotes.where((p) {
+        final entreguesQuinzena = listaPacotes.where((p) {
           return p.entregue &&
-              !p.dataLeitura.isBefore(inicioSemana) &&
-              p.dataLeitura.isBefore(fimSemana);
+              !p.dataLeitura.isBefore(inicioQuinzena) &&
+              p.dataLeitura.isBefore(fimQuinzena);
         }).length;
 
         final ganhoHoje = entreguesHoje * valorPacote;
-        final ganhoSemana = entreguesSemana * valorPacote;
+        final ganhoQuinzena = entreguesQuinzena * valorPacote;
         final ganhoMes = entreguesMes * valorPacote;
 
         final diasDecorridosNoMes = agora.day;
@@ -204,8 +204,8 @@ class _RelatoriosPageState extends State<RelatoriosPage> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _TileRelatorio(
-                        valor: 'R\$ ${_formatarDinheiro(ganhoSemana)}',
-                        titulo: 'Semana',
+                        valor: 'R\$ ${_formatarDinheiro(ganhoQuinzena)}',
+                        titulo: 'Quinzena',
                         backgroundColor: context.accentColors.container(2),
                         foregroundColor: context.accentColors.onContainer(2),
                       ),

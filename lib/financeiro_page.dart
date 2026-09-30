@@ -5,34 +5,7 @@ import 'package:intl/intl.dart';
 
 import 'app_theme.dart';
 import 'main.dart';
-
-// Pagamento é quinzenal: dia 1 ao 15, e dia 16 até o fim do mês. O
-// dinheiro da quinzena não cai na hora — o motorista informou que leva
-// até 5 dias corridos depois do fim de cada quinzena (então até dia 20
-// pra 1ª quinzena, e até dia 5 do mês seguinte pra 2ª).
-DateTime _inicioDaQuinzena(DateTime data) {
-  final dia = data.day <= 15 ? 1 : 16;
-  return DateTime(data.year, data.month, dia);
-}
-
-DateTime _fimDaQuinzena(DateTime data) {
-  if (data.day <= 15) {
-    return DateTime(data.year, data.month, 15);
-  }
-
-  // Dia 0 do mês seguinte = último dia do mês atual, lida sozinho com
-  // meses de 28, 29, 30 ou 31 dias.
-  final ultimoDia = DateTime(data.year, data.month + 1, 0);
-  return DateTime(ultimoDia.year, ultimoDia.month, ultimoDia.day);
-}
-
-DateTime _previsaoPagamento(DateTime fimQuinzena) {
-  return fimQuinzena.add(const Duration(days: 5));
-}
-
-bool _mesmoDia(DateTime a, DateTime b) {
-  return a.year == b.year && a.month == b.month && a.day == b.day;
-}
+import 'utils/quinzena.dart' as quinzena;
 
 class FinanceiroPage extends StatefulWidget {
   const FinanceiroPage({super.key});
@@ -45,38 +18,6 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
   final valorController = TextEditingController();
   final observacaoController = TextEditingController();
   bool salvando = false;
-
-  // Buscado uma vez só via count() (não baixa os documentos, só o número)
-  // em vez de um StreamBuilder ouvindo em tempo real TODAS as entregas já
-  // feitas só pra contar quantas são — isso mantinha uma conexão aberta
-  // baixando o histórico inteiro de novo a cada rebuild da tela.
-  int? _totalEntregasPagas;
-
-  @override
-  void initState() {
-    super.initState();
-    _carregarTotalEntregas();
-  }
-
-  Future<void> _carregarTotalEntregas() async {
-    final usuario = FirebaseAuth.instance.currentUser;
-    if (usuario == null) return;
-
-    try {
-      final agregada = await FirebaseFirestore.instance
-          .collection('entregas')
-          .where('motoristaId', isEqualTo: usuario.uid)
-          .where('entregue', isEqualTo: true)
-          .count()
-          .get();
-
-      if (!mounted) return;
-      setState(() => _totalEntregasPagas = agregada.count ?? 0);
-    } catch (_) {
-      // Sem conseguir a contagem, o resumo só fica zerado até a próxima
-      // vez que a tela abrir — não é crítico.
-    }
-  }
 
   @override
   void dispose() {
@@ -208,7 +149,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
               ? valorPacoteRaw.toDouble()
               : 3.0;
 
-          final totalEntregas = _totalEntregasPagas ?? 0;
+          final totalEntregas = listaPacotes.where((p) => p.entregue).length;
           final ganhoTotal = totalEntregas * valorPacote;
 
           return StreamBuilder<QuerySnapshot>(
@@ -242,9 +183,9 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
               final saldo = ganhoTotal - totalRecebido;
 
               final agora = DateTime.now();
-              final inicioQuinzena = _inicioDaQuinzena(agora);
-              final fimQuinzena = _fimDaQuinzena(agora);
-              final previsaoPagamento = _previsaoPagamento(fimQuinzena);
+              final inicioQuinzena = quinzena.inicioDaQuinzena(agora);
+              final fimQuinzena = quinzena.fimDaQuinzena(agora);
+              final previsaoPagamento = quinzena.previsaoPagamento(fimQuinzena);
               final fimQuinzenaExclusivo = fimQuinzena.add(
                 const Duration(days: 1),
               );
@@ -581,9 +522,9 @@ class _CalendarioQuinzena extends StatelessWidget {
   }) {
     final dentroDaQuinzena =
         !data.isBefore(inicioQuinzena) && !data.isAfter(fimQuinzena);
-    final ehInicio = _mesmoDia(data, inicioQuinzena);
-    final ehFim = _mesmoDia(data, fimQuinzena);
-    final ehHoje = _mesmoDia(data, hoje);
+    final ehInicio = quinzena.mesmoDia(data, inicioQuinzena);
+    final ehFim = quinzena.mesmoDia(data, fimQuinzena);
+    final ehHoje = quinzena.mesmoDia(data, hoje);
 
     return Container(
       margin: const EdgeInsets.all(2),

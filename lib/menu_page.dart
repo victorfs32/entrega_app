@@ -123,7 +123,9 @@ class _MenuPageState extends State<MenuPage> {
               ? 'Nenhuma foto pendente para sincronizar.'
               : 'Finalizado. Pendentes: ${resultado.totalEncontradas} | Enviadas: ${resultado.totalEnviadas} | Já sincronizadas: ${resultado.totalIgnoradas} | Erros: ${resultado.totalErros}',
         ),
-        backgroundColor: resultado.totalErros == 0 ? Colors.green : Colors.orange,
+        backgroundColor: resultado.totalErros == 0
+            ? Colors.green
+            : Colors.orange,
       ),
     );
   }
@@ -143,7 +145,11 @@ class _MenuPageState extends State<MenuPage> {
             color: context.accentColors.container(cor),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Icon(icon, size: 26, color: context.accentColors.onContainer(cor)),
+          child: Icon(
+            icon,
+            size: 26,
+            color: context.accentColors.onContainer(cor),
+          ),
         ),
         title: Text(
           titulo,
@@ -212,7 +218,9 @@ class _MenuPageState extends State<MenuPage> {
                 if (quantidade != null && quantidade > 0) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('$quantidade pacote(s) registrados no lote.'),
+                      content: Text(
+                        '$quantidade pacote(s) registrados no lote.',
+                      ),
                       backgroundColor: Colors.green,
                     ),
                   );
@@ -222,7 +230,7 @@ class _MenuPageState extends State<MenuPage> {
             _itemMenu(
               icon: Icons.bar_chart,
               titulo: 'Relatórios',
-              subtitulo: 'Ganhos por dia e por semana',
+              subtitulo: 'Ganhos por dia e por quinzena',
               cor: 3,
               onTap: () {
                 Navigator.push(

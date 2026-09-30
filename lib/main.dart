@@ -194,14 +194,6 @@ class _HomePageState extends State<HomePage> {
   double valorPacote = 3.0;
   bool carregando = true;
 
-  // Contagem de todas as entregas já feitas, buscada à parte via
-  // count() do Firestore (não baixa os documentos, só o número) — antes
-  // isso era `listaPacotes.where((p) => p.entregue).length`, mas
-  // listaPacotes só tem o que já foi carregado na tela, então "Total
-  // Baixas" ficava incorreto/lento conforme o histórico do motorista
-  // cresce. Nulo enquanto ainda não voltou a 1ª vez.
-  int? totalBaixasGeral;
-
   String _iniciais(String nome) {
     final partes = nome.trim().split(' ').where((e) => e.isNotEmpty).toList();
 
@@ -378,32 +370,11 @@ class _HomePageState extends State<HomePage> {
     super.initState();
 
     _carregarEntregasFirebase();
-    _carregarTotalBaixasGeral();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _verificarAtualizacao();
       _sincronizarFotosEmSegundoPlano();
     });
-  }
-
-  Future<void> _carregarTotalBaixasGeral() async {
-    final usuario = FirebaseAuth.instance.currentUser;
-    if (usuario == null) return;
-
-    try {
-      final agregada = await FirebaseFirestore.instance
-          .collection('entregas')
-          .where('motoristaId', isEqualTo: usuario.uid)
-          .where('entregue', isEqualTo: true)
-          .count()
-          .get();
-
-      if (!mounted) return;
-      setState(() => totalBaixasGeral = agregada.count ?? 0);
-    } catch (_) {
-      // Sem conseguir a contagem agregada, o card cai de volta pro que já
-      // está carregado em listaPacotes (ver build()) — não é crítico.
-    }
   }
 
   // Roda em segundo plano, sem diálogo nem snackbar: envia fotos de
@@ -709,8 +680,7 @@ class _HomePageState extends State<HomePage> {
       return p.entregue && _mesmoDia(p.dataLeitura, hoje);
     }).length;
 
-    final totalBaixas =
-        totalBaixasGeral ?? listaPacotes.where((p) => p.entregue).length;
+    final totalBaixas = listaPacotes.where((p) => p.entregue).length;
     final ganhoHoje = entregasHoje * valorPacote;
 
     final ultimasEntregas = listaPacotes
