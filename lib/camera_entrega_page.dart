@@ -93,36 +93,60 @@ class _CameraEntregaPageState extends State<CameraEntregaPage>
         orElse: () => cameras.first,
       );
 
-      // ResolutionPreset.max já causou "No supported surface combination"
-      // em vários aparelhos (pede mais do que o hardware consegue combinar
-      // pra preview+captura). veryHigh (1920x1080) é bem mais compatível e
-      // ainda é qualidade de sobra pra foto de comprovante.
+      // Tenta a qualidade máxima primeiro (foto de comprovante merece a
+      // melhor qualidade possível) e só cai pra uma resolução menor se o
+      // aparelho realmente não suportar ("No supported surface
+      // combination", hardware não consegue combinar preview+captura
+      // nessa resolução). Em cada resolução, tenta de novo com uma pausa
+      // crescente antes de desistir — o mobile_scanner às vezes ainda não
+      // liberou a câmera de verdade mesmo depois da pausa entre telas, e
+      // isso também lança erro no initialize() (não é sobre resolução).
       //
-      // Já existiu aqui um loop tentando várias resoluções e rodadas
-      // automáticas quando a inicialização falhava — removido porque o
-      // próprio dispose() de um controller cujo initialize() falhou pode
-      // lançar exceção (releaseFlutterSurfaceTexture em textura que nunca
-      // chegou a existir), e isso mascarava o erro original e deixava a
-      // câmera/scanner num estado "meio inicializado" pro resto da tela.
-      // Uma tentativa só, com fallback pro botão "Tentar novamente" (que já
-      // existe), é mais previsível.
-      final novoController = CameraController(
-        cameraTraseira,
+      // IMPORTANTE: o dispose() de cada tentativa falhada fica protegido
+      // no seu próprio try/catch — um controller cujo initialize() falhou
+      // pode não ter textura nenhuma pra liberar, e sem essa proteção o
+      // próprio dispose() lança uma 2ª exceção que mascara a original
+      // (bug já visto aqui antes).
+      const presetsEmOrdem = [
+        ResolutionPreset.max,
         ResolutionPreset.veryHigh,
-        enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.jpeg,
-      );
+        ResolutionPreset.high,
+      ];
 
-      try {
-        await novoController.initialize();
-      } catch (e) {
-        // Se o initialize() falhou, o controller pode não ter textura
-        // nenhuma pra liberar — não deixa o dispose() derrubar o erro
-        // original com uma segunda exceção.
-        try {
-          await novoController.dispose();
-        } catch (_) {}
-        rethrow;
+      CameraController? novoController;
+      Object? ultimoErro;
+
+      for (final preset in presetsEmOrdem) {
+        if (novoController != null) break;
+
+        for (var tentativa = 0; tentativa < 2; tentativa++) {
+          if (tentativa > 0) {
+            await Future.delayed(Duration(milliseconds: 400 * tentativa));
+          }
+
+          final candidato = CameraController(
+            cameraTraseira,
+            preset,
+            enableAudio: false,
+            imageFormatGroup: ImageFormatGroup.jpeg,
+          );
+
+          try {
+            await candidato.initialize();
+            novoController = candidato;
+            break;
+          } catch (e) {
+            ultimoErro = e;
+            try {
+              await candidato.dispose();
+            } catch (_) {}
+          }
+        }
+      }
+
+      if (novoController == null) {
+        if (ultimoErro is CameraException) throw ultimoErro;
+        throw ultimoErro ?? Exception('Falha desconhecida ao abrir a camera.');
       }
 
       await novoController.setFlashMode(FlashMode.off);

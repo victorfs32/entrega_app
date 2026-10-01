@@ -59,6 +59,14 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
   bool processandoFoto = false;
   bool salvando = false;
 
+  // O leitor às vezes erra ao reabrir ("controllerAlreadyInitialized") só
+  // porque a câmera de foto anterior ainda não tinha liberado o hardware
+  // de verdade, mesmo com a pausa em _voltarAoScanner(). Em vez de exigir
+  // que o motorista toque em "Tentar novamente" toda vez, tenta de novo
+  // sozinho algumas vezes antes de mostrar o botão manual.
+  int _tentativasScanner = 0;
+  bool _retryScannerAgendado = false;
+
   double? lat;
   double? lng;
 
@@ -115,6 +123,7 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
   void _iniciarEscaneamento() {
     if (nomeController.text.trim().isEmpty) return;
     FocusScope.of(context).unfocus();
+    _tentativasScanner = 0;
     setState(() {
       escaneando = true;
       controller = _novoScannerController();
@@ -137,6 +146,7 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
     await Future.delayed(const Duration(milliseconds: 600));
 
     processandoFoto = false;
+    _tentativasScanner = 0;
     if (!mounted) return;
 
     setState(() => controller = _novoScannerController());
@@ -238,7 +248,27 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
   }
 
   void _reiniciarScanner() {
+    _tentativasScanner = 0;
+    _retryScannerAgendado = false;
     setState(() => controller = _novoScannerController());
+  }
+
+  void _agendarRetryScannerAutomatico() {
+    const maxTentativasAutomaticas = 3;
+
+    if (_retryScannerAgendado ||
+        _tentativasScanner >= maxTentativasAutomaticas) {
+      return;
+    }
+
+    _retryScannerAgendado = true;
+    _tentativasScanner++;
+
+    Future.delayed(Duration(milliseconds: 500 * _tentativasScanner), () {
+      _retryScannerAgendado = false;
+      if (!mounted) return;
+      setState(() => controller = _novoScannerController());
+    });
   }
 
   void _removerItem(int index) {
@@ -515,29 +545,49 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
               onDetect: _onDetect,
               fit: BoxFit.cover,
               errorBuilder: (context, error) {
+                // A causa mais comum aqui é a câmera de foto ainda não ter
+                // liberado o hardware a tempo — um problema transitório,
+                // não algo que o motorista precise resolver tocando em um
+                // botão toda vez. Agenda a nova tentativa fora do build().
+                final aindaTentandoSozinho =
+                    _tentativasScanner < 3 || _retryScannerAgendado;
+                WidgetsBinding.instance.addPostFrameCallback(
+                  (_) => _agendarRetryScannerAutomatico(),
+                );
+
                 return Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
-                          Icons.no_photography,
-                          color: Colors.white,
-                          size: 48,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Não foi possível abrir a câmera: '
-                          '${error.errorCode.name}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed: _reiniciarScanner,
-                          child: const Text('Tentar novamente'),
-                        ),
+                        if (aindaTentandoSozinho) ...[
+                          const CircularProgressIndicator(color: Colors.white),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Reconectando a câmera...',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ] else ...[
+                          const Icon(
+                            Icons.no_photography,
+                            color: Colors.white,
+                            size: 48,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Não foi possível abrir a câmera: '
+                            '${error.errorCode.name}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          const SizedBox(height: 20),
+                          ElevatedButton(
+                            onPressed: _reiniciarScanner,
+                            child: const Text('Tentar novamente'),
+                          ),
+                        ],
                       ],
                     ),
                   ),
