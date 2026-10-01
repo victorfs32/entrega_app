@@ -89,7 +89,9 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
 
     final sufixo = segunda ? '_2' : '';
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final nomeArquivo = '${widget.codigo}$sufixo' '_$timestamp.jpg';
+    final nomeArquivo =
+        '${widget.codigo}$sufixo'
+        '_$timestamp.jpg';
 
     final novaFoto = await picked.copy('${fotosDir.path}/$nomeArquivo');
 
@@ -121,16 +123,6 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Tire a foto da entrega antes de salvar.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    if (foto2 == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Tire a 2ª foto da entrega antes de salvar.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -262,10 +254,8 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
   Widget build(BuildContext context) {
     final gpsOk = lat != null && lng != null;
 
-    final podeSalvar = !salvando &&
-        nomeController.text.trim().isNotEmpty &&
-        foto != null &&
-        foto2 != null;
+    final podeSalvar =
+        !salvando && nomeController.text.trim().isNotEmpty && foto != null;
 
     return Scaffold(
       appBar: AppBar(title: const Text("Registrar Entrega")),
@@ -288,12 +278,16 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
                   value: transportadora,
                   isDense: true,
                   underline: const SizedBox.shrink(),
-                  items: {
-                    ...CodigoRastreio.transportadorasDisponiveis,
-                    transportadora,
-                  }.map((opcao) {
-                    return DropdownMenuItem(value: opcao, child: Text(opcao));
-                  }).toList(),
+                  items:
+                      {
+                        ...CodigoRastreio.transportadorasDisponiveis,
+                        transportadora,
+                      }.map((opcao) {
+                        return DropdownMenuItem(
+                          value: opcao,
+                          child: Text(opcao),
+                        );
+                      }).toList(),
                   onChanged: (novaTransportadora) {
                     if (novaTransportadora == null) return;
                     setState(() => transportadora = novaTransportadora);
@@ -337,8 +331,8 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
                   height: 180,
                   width: double.infinity,
                   fit: BoxFit.cover,
-                  cacheHeight:
-                      (180 * MediaQuery.devicePixelRatioOf(context)).round(),
+                  cacheHeight: (180 * MediaQuery.devicePixelRatioOf(context))
+                      .round(),
                 ),
               ),
 
@@ -351,7 +345,7 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
                 onPressed: salvando ? null : () => _tirarFoto(segunda: true),
                 icon: const Icon(Icons.add_a_photo_outlined),
                 label: Text(
-                  foto2 == null ? "Tirar 2ª foto da entrega" : "Trocar 2ª foto",
+                  foto2 == null ? "Tirar 2ª foto (opcional)" : "Trocar 2ª foto",
                 ),
               ),
             ),
@@ -377,7 +371,9 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
                     top: 6,
                     right: 6,
                     child: IconButton.filled(
-                      onPressed: salvando ? null : () => setState(() => foto2 = null),
+                      onPressed: salvando
+                          ? null
+                          : () => setState(() => foto2 = null),
                       icon: const Icon(Icons.close, size: 18),
                       style: IconButton.styleFrom(
                         backgroundColor: Colors.black.withValues(alpha: 0.55),
@@ -451,8 +447,6 @@ class _RegistrarEntregaPageState extends State<RegistrarEntregaPage> {
                             ? "Informe o recebedor"
                             : foto == null
                             ? "Tire a foto da entrega"
-                            : foto2 == null
-                            ? "Tire a 2ª foto da entrega"
                             : "Confirmar Entrega",
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
