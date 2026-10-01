@@ -97,10 +97,14 @@ class _CameraEntregaPageState extends State<CameraEntregaPage>
       // melhor qualidade possível) e só cai pra uma resolução menor se o
       // aparelho realmente não suportar ("No supported surface
       // combination", hardware não consegue combinar preview+captura
-      // nessa resolução). Em cada resolução, tenta de novo com uma pausa
-      // crescente antes de desistir — o mobile_scanner às vezes ainda não
-      // liberou a câmera de verdade mesmo depois da pausa entre telas, e
-      // isso também lança erro no initialize() (não é sobre resolução).
+      // nessa resolução).
+      //
+      // O erro de "surface combination" nesse app quase sempre é, na
+      // verdade, o mobile_scanner não ter liberado a câmera a tempo (o
+      // próprio detalhe do erro mostra a sessão antiga ainda anexada) —
+      // não é sobre resolução. Por isso cada resolução ganha várias
+      // tentativas com pausa crescente antes de cair pra próxima, em vez
+      // de desistir rápido da qualidade máxima.
       //
       // IMPORTANTE: o dispose() de cada tentativa falhada fica protegido
       // no seu próprio try/catch — um controller cujo initialize() falhou
@@ -112,6 +116,7 @@ class _CameraEntregaPageState extends State<CameraEntregaPage>
         ResolutionPreset.veryHigh,
         ResolutionPreset.high,
       ];
+      const tentativasPorPreset = 3;
 
       CameraController? novoController;
       Object? ultimoErro;
@@ -119,9 +124,9 @@ class _CameraEntregaPageState extends State<CameraEntregaPage>
       for (final preset in presetsEmOrdem) {
         if (novoController != null) break;
 
-        for (var tentativa = 0; tentativa < 2; tentativa++) {
+        for (var tentativa = 0; tentativa < tentativasPorPreset; tentativa++) {
           if (tentativa > 0) {
-            await Future.delayed(Duration(milliseconds: 400 * tentativa));
+            await Future.delayed(Duration(milliseconds: 600 * tentativa));
           }
 
           final candidato = CameraController(

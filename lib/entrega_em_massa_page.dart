@@ -142,8 +142,10 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
     // (camera_entrega_page.dart), mas a confirmação que o Android/iOS dá
     // pro plugin nem sempre significa que o hardware já está 100% livre no
     // driver. Essa pausa extra é a margem de segurança pra evitar a
-    // corrida — sem ela, o leitor às vezes abre com tela preta.
-    await Future.delayed(const Duration(milliseconds: 600));
+    // corrida — sem ela, o leitor às vezes abre com tela preta ou com
+    // "controllerAlreadyInitialized". Mesmo aparelho que precisou de mais
+    // margem na ida (ver _onDetect) também precisa de mais aqui.
+    await Future.delayed(const Duration(milliseconds: 900));
 
     processandoFoto = false;
     _tentativasScanner = 0;
@@ -207,11 +209,12 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
     await HapticFeedback.mediumImpact();
     await SystemSound.play(SystemSoundType.click);
 
-    // Mesma margem de segurança usada na volta (scanner -> foto -> scanner),
-    // só que na ida. Bipar vários pacotes em sequência é justamente o que
-    // repete essa troca de câmera várias vezes seguidas, então é aqui que a
-    // corrida com o driver mais aparece.
-    await Future.delayed(const Duration(milliseconds: 400));
+    // O erro "No supported surface combination" voltou a acontecer mesmo
+    // com 400ms de pausa, e o detalhe do erro mostra a sessão de câmera
+    // do leitor AINDA anexada quando a câmera de foto tenta abrir — ou
+    // seja, o dispose() do mobile_scanner não libera o hardware de
+    // verdade dentro desse prazo nesse aparelho. Subido pra 1200ms.
+    await Future.delayed(const Duration(milliseconds: 1200));
 
     if (!mounted) return;
 
