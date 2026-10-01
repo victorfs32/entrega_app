@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'camera_entrega_page.dart';
 import 'main.dart';
 import 'model/pacote.dart';
 import 'services/entrega_status_service.dart';
@@ -26,15 +25,20 @@ class _ItemLote {
   });
 }
 
-/// Bipa vários pacotes em sequência para o mesmo recebedor/local, tirando
-/// uma foto por pacote — só o nome do recebedor e o GPS são compartilhados
-/// pelo lote. Antes de salvar, mostra uma tela de conferência com a lista
-/// completa e o total de pacotes.
+/// Bipa vários pacotes em sequência para o mesmo recebedor/local — só o
+/// nome do recebedor e o GPS são compartilhados pelo lote. Antes de salvar,
+/// mostra uma tela de conferência com a lista completa e o total de
+/// pacotes.
 ///
-/// Chegou a tirar duas fotos por pacote (a do pacote e a do local de
-/// entrega), mas isso dobrava as trocas de câmera em sequência na baixa em
-/// massa e voltou a causar o erro de câmera mesmo com as pausas de
-/// segurança — voltado pra uma foto só a pedido do usuário.
+/// A "foto do pacote" é o próprio frame que o leitor de código capturou no
+/// momento do bipe (returnImage: true no MobileScannerController), não uma
+/// foto tirada numa câmera separada depois. Chegou a existir uma 2ª câmera
+/// dedicada pra foto (como na entrega individual), mas abrir/fechar duas
+/// câmeras diferentes em sequência repetidas vezes causava uma disputa de
+/// hardware real nesse fluxo ("No supported surface combination",
+/// "controllerAlreadyInitialized") que nem aumentar bastante as pausas de
+/// segurança resolvia de vez — usar só a câmera do leitor elimina a troca
+/// de câmera inteira.
 class EntregaEmMassaPage extends StatefulWidget {
   const EntregaEmMassaPage({super.key});
 
@@ -47,9 +51,11 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
   final List<_ItemLote> itens = [];
   final Set<String> codigosNoLote = {};
 
-  // Nulo enquanto a câmera de foto está aberta ou sendo trocada: o
-  // mobile_scanner e o camera disputam o mesmo hardware, então o leitor
-  // fica sem controller (tela mostra um loading) até a foto voltar.
+  // Só fica nulo entre a tela de conferência e o leitor (ver
+  // _abrirConfirmacao/_voltarParaScannerDaConfirmacao) — durante o
+  // escaneamento em si, o controller nunca é descartado, porque a "foto"
+  // de cada pacote vem do próprio frame do leitor, sem precisar de uma
+  // câmera separada.
   MobileScannerController? controller;
   int _scannerGeracao = 0;
   Directory? _fotosDirCache;
@@ -59,11 +65,10 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
   bool processandoFoto = false;
   bool salvando = false;
 
-  // O leitor às vezes erra ao reabrir ("controllerAlreadyInitialized") só
-  // porque a câmera de foto anterior ainda não tinha liberado o hardware
-  // de verdade, mesmo com a pausa em _voltarAoScanner(). Em vez de exigir
-  // que o motorista toque em "Tentar novamente" toda vez, tenta de novo
-  // sozinho algumas vezes antes de mostrar o botão manual.
+  // O leitor pode falhar ao (re)abrir por vários motivos transitórios
+  // (ex: voltando da tela de conferência). Em vez de exigir que o
+  // motorista toque em "Tentar novamente" toda vez, tenta de novo sozinho
+  // algumas vezes antes de mostrar o botão manual.
   int _tentativasScanner = 0;
   bool _retryScannerAgendado = false;
 
@@ -89,7 +94,9 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
       detectionSpeed: DetectionSpeed.noDuplicates,
       facing: CameraFacing.back,
       torchEnabled: false,
-      returnImage: false,
+      // Precisa estar ligado pra BarcodeCapture.image vir preenchido —
+      // é esse frame que vira a "foto do pacote" salva no lote.
+      returnImage: true,
     );
   }
 
@@ -130,30 +137,6 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
     });
   }
 
-  Future<File?> _abrirCamera(String titulo) {
-    return Navigator.push<File>(
-      context,
-      MaterialPageRoute(builder: (_) => CameraEntregaPage(titulo: titulo)),
-    );
-  }
-
-  Future<void> _voltarAoScanner() async {
-    // A câmera de foto espera o próprio dispose() antes de fechar a tela
-    // (camera_entrega_page.dart), mas a confirmação que o Android/iOS dá
-    // pro plugin nem sempre significa que o hardware já está 100% livre no
-    // driver. Essa pausa extra é a margem de segurança pra evitar a
-    // corrida — sem ela, o leitor às vezes abre com tela preta ou com
-    // "controllerAlreadyInitialized". Mesmo aparelho que precisou de mais
-    // margem na ida (ver _onDetect) também precisa de mais aqui.
-    await Future.delayed(const Duration(milliseconds: 900));
-
-    processandoFoto = false;
-    _tentativasScanner = 0;
-    if (!mounted) return;
-
-    setState(() => controller = _novoScannerController());
-  }
-
   Future<void> _onDetect(BarcodeCapture capture) async {
     if (processandoFoto) return;
     if (controller == null) return;
@@ -183,12 +166,16 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
       return;
     }
 
-    if (await EntregaStatusService.jaEntregue(codigoLido)) {
+    // Captura o frame já aqui, antes de qualquer outro await — é a cena
+    // exata que o leitor estava vendo no instante do bipe.
+    final bytesImagem = capture.image;
+
+    if (bytesImagem == null) {
       await HapticFeedback.heavyImpact();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Pacote $codigoLido já foi entregue anteriormente.'),
+        const SnackBar(
+          content: Text('Não deu pra capturar a foto, bipe de novo.'),
         ),
       );
       return;
@@ -196,58 +183,46 @@ class _EntregaEmMassaPageState extends State<EntregaEmMassaPage> {
 
     processandoFoto = true;
 
-    // Fecha o leitor de vez (não só stop()) antes de abrir a câmera de
-    // foto. Um stop() sozinho pode deixar a sessão de câmera "presa" no
-    // driver do aparelho, e a segunda câmera (a de foto) abre com tela
-    // preta ou com erro de combinação de superfícies porque o hardware
-    // ainda não foi liberado de verdade quando o CameraController tenta
-    // reivindicar ele.
-    final controladorAntigo = controller;
-    setState(() => controller = null);
-    await controladorAntigo?.dispose();
+    try {
+      if (await EntregaStatusService.jaEntregue(codigoLido)) {
+        await HapticFeedback.heavyImpact();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Pacote $codigoLido já foi entregue anteriormente.'),
+          ),
+        );
+        return;
+      }
 
-    await HapticFeedback.mediumImpact();
-    await SystemSound.play(SystemSoundType.click);
+      await HapticFeedback.mediumImpact();
+      await SystemSound.play(SystemSoundType.click);
 
-    // O erro "No supported surface combination" voltou a acontecer mesmo
-    // com 400ms de pausa, e o detalhe do erro mostra a sessão de câmera
-    // do leitor AINDA anexada quando a câmera de foto tenta abrir — ou
-    // seja, o dispose() do mobile_scanner não libera o hardware de
-    // verdade dentro desse prazo nesse aparelho. Subido pra 1200ms.
-    await Future.delayed(const Duration(milliseconds: 1200));
+      final transportadora = CodigoRastreio.transportadora(codigoLido);
+      final codigo = codigoLido;
 
-    if (!mounted) return;
+      final dir = await _fotosDir();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final arquivoFoto = File('${dir.path}/${codigo}_$timestamp.jpg');
+      await arquivoFoto.writeAsBytes(bytesImagem);
 
-    final transportadora = CodigoRastreio.transportadora(codigoLido);
-    final codigo = codigoLido;
+      if (!mounted) return;
 
-    final fotoPacote = await _abrirCamera('Foto do pacote');
-
-    if (fotoPacote == null || !mounted) {
-      await _voltarAoScanner();
-      return;
-    }
-
-    final dir = await _fotosDir();
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final fotoPacoteSalva = await fotoPacote.copy(
-      '${dir.path}/${codigo}_$timestamp.jpg',
-    );
-
-    if (mounted) {
       setState(() {
         itens.add(
           _ItemLote(
             codigo: codigo,
             transportadora: transportadora,
-            foto: fotoPacoteSalva,
+            foto: arquivoFoto,
           ),
         );
         codigosNoLote.add(codigo);
       });
+    } finally {
+      // Sem câmera pra trocar e reabrir, não precisa de pausa nenhuma
+      // aqui — o leitor nunca saiu do ar durante o bipe.
+      processandoFoto = false;
     }
-
-    await _voltarAoScanner();
   }
 
   void _reiniciarScanner() {
