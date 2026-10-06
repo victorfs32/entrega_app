@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 import 'app_theme.dart';
-import 'main.dart';
+import 'services/lancamentos_service.dart';
 import 'utils/quinzena.dart' as quinzena;
 
 class _DiaEntregas {
@@ -13,36 +11,11 @@ class _DiaEntregas {
   _DiaEntregas({required this.dia, required this.quantidade});
 }
 
-class RelatoriosPage extends StatefulWidget {
+/// Relatórios de produção e ganho, calculados a partir dos lançamentos
+/// diários (os mesmos que alimentam o Financeiro) — assim os números das
+/// duas telas nunca divergem.
+class RelatoriosPage extends StatelessWidget {
   const RelatoriosPage({super.key});
-
-  @override
-  State<RelatoriosPage> createState() => _RelatoriosPageState();
-}
-
-class _RelatoriosPageState extends State<RelatoriosPage> {
-  // Buscado uma vez só e reaproveitado — antes esse Future era criado
-  // direto dentro do build(), então qualquer rebuild (mudança de tema,
-  // MediaQuery etc.) disparava uma nova consulta ao Firestore e piscava a
-  // tela inteira de novo enquanto ela respondia.
-  Future<DocumentSnapshot>? _motoristaFuture;
-
-  @override
-  void initState() {
-    super.initState();
-
-    final usuario = FirebaseAuth.instance.currentUser;
-    if (usuario != null) {
-      _motoristaFuture = FirebaseFirestore.instance
-          .collection('motoristas')
-          .doc(usuario.uid)
-          .get();
-    }
-  }
-
-  bool _mesmoDia(DateTime a, DateTime b) {
-    return a.day == b.day && a.month == b.month && a.year == b.year;
-  }
 
   String _formatarDinheiro(double valor) {
     return valor.toStringAsFixed(2).replaceAll('.', ',');
@@ -55,84 +28,50 @@ class _RelatoriosPageState extends State<RelatoriosPage> {
 
   @override
   Widget build(BuildContext context) {
-    final motoristaFuture = _motoristaFuture;
-
-    if (motoristaFuture == null) {
-      return const Scaffold(body: Center(child: Text('Usuário não logado')));
-    }
-
-    return FutureBuilder<DocumentSnapshot>(
-      future: motoristaFuture,
+    return StreamBuilder<List<Lancamento>>(
+      stream: LancamentosService.ouvir(),
       builder: (context, snapshot) {
-        double valorPacote = 3.00;
-
-        if (snapshot.hasData && snapshot.data!.exists) {
-          final dados = snapshot.data!.data() as Map<String, dynamic>?;
-
-          final valor = dados?['valorPacote'];
-
-          if (valor is int) {
-            valorPacote = valor.toDouble();
-          } else if (valor is double) {
-            valorPacote = valor;
-          } else if (valor is String) {
-            valorPacote = double.tryParse(valor.replaceAll(',', '.')) ?? 3.00;
-          }
-        }
+        final lancamentos = snapshot.data ?? const <Lancamento>[];
 
         final agora = DateTime.now();
+        final hoje = DateTime(agora.year, agora.month, agora.day);
+        final ontem = hoje.subtract(const Duration(days: 1));
 
-        final inicioHoje = DateTime(agora.year, agora.month, agora.day);
-        final inicioAmanha = inicioHoje.add(const Duration(days: 1));
-
-        final ontem = inicioHoje.subtract(const Duration(days: 1));
-
-        final inicioMes = DateTime(agora.year, agora.month, 1);
-        final inicioProximoMes = DateTime(agora.year, agora.month + 1, 1);
-
-        final inicioQuinzena = quinzena.inicioDaQuinzena(agora);
-        final fimQuinzena = quinzena
-            .fimDaQuinzena(agora)
-            .add(const Duration(days: 1));
-
-        final entreguesHoje = listaPacotes.where((p) {
-          return p.entregue &&
-              !p.dataLeitura.isBefore(inicioHoje) &&
-              p.dataLeitura.isBefore(inicioAmanha);
-        }).length;
-
-        final entreguesOntem = listaPacotes.where((p) {
-          return p.entregue && _mesmoDia(p.dataLeitura, ontem);
-        }).length;
-
-        final entreguesMes = listaPacotes.where((p) {
-          return p.entregue &&
-              !p.dataLeitura.isBefore(inicioMes) &&
-              p.dataLeitura.isBefore(inicioProximoMes);
-        }).length;
-
-        final entreguesQuinzena = listaPacotes.where((p) {
-          return p.entregue &&
-              !p.dataLeitura.isBefore(inicioQuinzena) &&
-              p.dataLeitura.isBefore(fimQuinzena);
-        }).length;
-
-        final ganhoHoje = entreguesHoje * valorPacote;
-        final ganhoQuinzena = entreguesQuinzena * valorPacote;
-        final ganhoMes = entreguesMes * valorPacote;
+        final resumoHoje = LancamentosService.somar(
+          lancamentos,
+          inicio: hoje,
+          fim: hoje,
+        );
+        final resumoOntem = LancamentosService.somar(
+          lancamentos,
+          inicio: ontem,
+          fim: ontem,
+        );
+        final resumoQuinzena = LancamentosService.somar(
+          lancamentos,
+          inicio: quinzena.inicioDaQuinzena(hoje),
+          fim: quinzena.fimDaQuinzena(hoje),
+        );
+        final resumoMes = LancamentosService.somar(
+          lancamentos,
+          inicio: DateTime(hoje.year, hoje.month, 1),
+          fim: DateTime(hoje.year, hoje.month + 1, 0),
+        );
 
         final diasDecorridosNoMes = agora.day;
         final mediaDiariaMes = diasDecorridosNoMes == 0
             ? 0.0
-            : entreguesMes / diasDecorridosNoMes;
+            : resumoMes.totalPacotes / diasDecorridosNoMes;
 
         final ultimos7Dias = List.generate(7, (i) {
-          final dia = inicioHoje.subtract(Duration(days: 6 - i));
-          final quantidade = listaPacotes.where((p) {
-            return p.entregue && _mesmoDia(p.dataLeitura, dia);
-          }).length;
+          final dia = hoje.subtract(Duration(days: 6 - i));
+          final resumo = LancamentosService.somar(
+            lancamentos,
+            inicio: dia,
+            fim: dia,
+          );
 
-          return _DiaEntregas(dia: dia, quantidade: quantidade);
+          return _DiaEntregas(dia: dia, quantidade: resumo.totalPacotes);
         });
 
         final colors = Theme.of(context).colorScheme;
@@ -145,7 +84,7 @@ class _RelatoriosPageState extends State<RelatoriosPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Entregas',
+                  'Pacotes',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -155,7 +94,7 @@ class _RelatoriosPageState extends State<RelatoriosPage> {
                   children: [
                     Expanded(
                       child: _TileRelatorio(
-                        valor: '$entreguesOntem',
+                        valor: '${resumoOntem.totalPacotes}',
                         titulo: 'Ontem',
                         backgroundColor: context.accentColors.container(3),
                         foregroundColor: context.accentColors.onContainer(3),
@@ -164,7 +103,7 @@ class _RelatoriosPageState extends State<RelatoriosPage> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _TileRelatorio(
-                        valor: '$entreguesHoje',
+                        valor: '${resumoHoje.totalPacotes}',
                         titulo: 'Hoje',
                         backgroundColor: context.accentColors.container(2),
                         foregroundColor: context.accentColors.onContainer(2),
@@ -173,7 +112,7 @@ class _RelatoriosPageState extends State<RelatoriosPage> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _TileRelatorio(
-                        valor: '$entreguesMes',
+                        valor: '${resumoMes.totalPacotes}',
                         titulo: 'Mês',
                         backgroundColor: context.accentColors.container(1),
                         foregroundColor: context.accentColors.onContainer(1),
@@ -195,7 +134,7 @@ class _RelatoriosPageState extends State<RelatoriosPage> {
                   children: [
                     Expanded(
                       child: _TileRelatorio(
-                        valor: 'R\$ ${_formatarDinheiro(ganhoHoje)}',
+                        valor: 'R\$ ${_formatarDinheiro(resumoHoje.ganho)}',
                         titulo: 'Hoje',
                         backgroundColor: context.accentColors.container(3),
                         foregroundColor: context.accentColors.onContainer(3),
@@ -204,7 +143,7 @@ class _RelatoriosPageState extends State<RelatoriosPage> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _TileRelatorio(
-                        valor: 'R\$ ${_formatarDinheiro(ganhoQuinzena)}',
+                        valor: 'R\$ ${_formatarDinheiro(resumoQuinzena.ganho)}',
                         titulo: 'Quinzena',
                         backgroundColor: context.accentColors.container(2),
                         foregroundColor: context.accentColors.onContainer(2),
@@ -213,7 +152,7 @@ class _RelatoriosPageState extends State<RelatoriosPage> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _TileRelatorio(
-                        valor: 'R\$ ${_formatarDinheiro(ganhoMes)}',
+                        valor: 'R\$ ${_formatarDinheiro(resumoMes.ganho)}',
                         titulo: 'Mês',
                         backgroundColor: context.accentColors.container(1),
                         foregroundColor: context.accentColors.onContainer(1),
@@ -229,7 +168,8 @@ class _RelatoriosPageState extends State<RelatoriosPage> {
                     leading: Icon(Icons.speed, color: colors.primary),
                     title: const Text('Média diária do mês'),
                     subtitle: Text(
-                      '$entreguesMes entregas em $diasDecorridosNoMes dia(s)',
+                      '${resumoMes.totalPacotes} pacotes em '
+                      '$diasDecorridosNoMes dia(s)',
                     ),
                     trailing: Text(
                       '${mediaDiariaMes.toStringAsFixed(1).replaceAll('.', ',')}/dia',

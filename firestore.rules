@@ -42,7 +42,16 @@ service cloud.firestore {
         (autenticado() && request.auth.uid == uid &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['valorPacote']) &&
          request.resource.data.valorPacote is number &&
-         request.resource.data.valorPacote > 0);
+         request.resource.data.valorPacote > 0)
+        ||
+        // Valores por pacote de cada empresa (Anjun / iMile), editados
+        // pelo próprio motorista na tela de lançamento diário.
+        (autenticado() && request.auth.uid == uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['valorAnjun', 'valorImile']) &&
+         (!('valorAnjun' in request.resource.data) ||
+          (request.resource.data.valorAnjun is number && request.resource.data.valorAnjun > 0)) &&
+         (!('valorImile' in request.resource.data) ||
+          (request.resource.data.valorImile is number && request.resource.data.valorImile > 0)));
       // Autocadastro: o próprio usuário recém-autenticado pode criar o
       // documento do seu perfil (tela de Cadastro no app) — mas nunca
       // como admin, senão qualquer um que se cadastrasse ganharia acesso
@@ -58,6 +67,20 @@ service cloud.firestore {
       allow create: if admin() || (ativo() && request.resource.data.motoristaId == request.auth.uid);
       allow update: if admin() || (ativo() && resource.data.motoristaId == request.auth.uid);
       allow delete: if admin();
+    }
+
+    // Lançamento diário (quantos pacotes de cada empresa o motorista
+    // entregou no dia). Um documento por motorista por dia, com id
+    // "<uid>_<yyyy-MM-dd>". Só o dono mexe nos próprios lançamentos; a
+    // leitura é sempre por query filtrada por motoristaId (nunca get de
+    // um id que talvez não exista, que a regra recusaria por não ter
+    // resource.data).
+    match /lancamentos/{id} {
+      allow read: if admin() || (ativo() && resource.data.motoristaId == request.auth.uid);
+      allow create: if admin() || (ativo() && request.resource.data.motoristaId == request.auth.uid);
+      allow update: if admin() || (ativo() && resource.data.motoristaId == request.auth.uid
+                                   && request.resource.data.motoristaId == request.auth.uid);
+      allow delete: if admin() || (ativo() && resource.data.motoristaId == request.auth.uid);
     }
 
     // Ganho x recebido de cada motorista. O próprio motorista registra

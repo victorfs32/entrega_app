@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'app_theme.dart';
-import 'main.dart';
+import 'lancamento_page.dart';
+import 'services/lancamentos_service.dart';
 import 'utils/quinzena.dart' as quinzena;
 
 class FinanceiroPage extends StatefulWidget {
@@ -24,6 +25,19 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
     valorController.dispose();
     observacaoController.dispose();
     super.dispose();
+  }
+
+  Future<void> _abrirLancamento({DateTime? dia}) async {
+    final salvou = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => LancamentoPage(diaInicial: dia)),
+    );
+
+    if (salvou == true && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Lançamento salvo.')));
+    }
   }
 
   Future<void> _registrarRecebimento() async {
@@ -136,21 +150,22 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Financeiro')),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('motoristas')
-            .doc(usuario.uid)
-            .snapshots(),
-        builder: (context, motoristaSnap) {
-          final dadosMotorista =
-              motoristaSnap.data?.data() as Map<String, dynamic>?;
-          final valorPacoteRaw = dadosMotorista?['valorPacote'];
-          final valorPacote = valorPacoteRaw is num
-              ? valorPacoteRaw.toDouble()
-              : 3.0;
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _abrirLancamento,
+        icon: const Icon(Icons.add),
+        label: const Text('Lançar o dia'),
+      ),
+      body: StreamBuilder<List<Lancamento>>(
+        stream: LancamentosService.ouvir(),
+        builder: (context, lancamentosSnap) {
+          final lancamentos = lancamentosSnap.data ?? const <Lancamento>[];
 
-          final totalEntregas = listaPacotes.where((p) => p.entregue).length;
-          final ganhoTotal = totalEntregas * valorPacote;
+          // O ganho vem só dos lançamentos diários feitos à mão (cada um
+          // com o valor por pacote de cada empresa gravado na hora) — as
+          // baixas bipadas não entram aqui, pra não contar em dobro.
+          final resumoTotal = LancamentosService.somar(lancamentos);
+          final totalEntregas = resumoTotal.totalPacotes;
+          final ganhoTotal = resumoTotal.ganho;
 
           return StreamBuilder<QuerySnapshot>(
             // Sem orderBy aqui de propósito: combinar isso com o where
@@ -190,13 +205,13 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
                 const Duration(days: 1),
               );
 
-              final entregasQuinzena = listaPacotes.where((p) {
-                return p.entregue &&
-                    !p.dataLeitura.isBefore(inicioQuinzena) &&
-                    p.dataLeitura.isBefore(fimQuinzenaExclusivo);
-              }).length;
-
-              final ganhoQuinzena = entregasQuinzena * valorPacote;
+              final resumoQuinzena = LancamentosService.somar(
+                lancamentos,
+                inicio: inicioQuinzena,
+                fim: fimQuinzena,
+              );
+              final entregasQuinzena = resumoQuinzena.totalPacotes;
+              final ganhoQuinzena = resumoQuinzena.ganho;
 
               final recebidoQuinzena = docs.fold<double>(0, (soma, doc) {
                 final dados = doc.data() as Map<String, dynamic>;
@@ -213,7 +228,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
               });
 
               return ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                 children: [
                   Card(
                     child: Padding(
@@ -284,9 +299,19 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
                           _linhaResumo(
                             icon: Icons.inventory_2_outlined,
                             titulo:
-                                'Ganho na quinzena ($entregasQuinzena entregas)',
+                                'Ganho na quinzena ($entregasQuinzena pacotes)',
                             valor: _formatarDinheiro(ganhoQuinzena),
                             color: colors.primary,
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 36, bottom: 4),
+                            child: Text(
+                              'Anjun ${resumoQuinzena.anjun} • iMile ${resumoQuinzena.imile}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: colors.onSurfaceVariant,
+                              ),
+                            ),
                           ),
                           _linhaResumo(
                             icon: Icons.check_circle_outline,
@@ -331,6 +356,42 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
                       ),
                     ),
                   ),
+
+                  const SizedBox(height: 20),
+
+                  Text(
+                    'Lançamentos do dia',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  if (lancamentos.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text(
+                        'Nenhum lançamento ainda. Toque em "Lançar o dia" '
+                        'pra registrar quantos pacotes entregou.',
+                      ),
+                    ),
+
+                  ...lancamentos.take(15).map((l) {
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: const Icon(Icons.today_outlined),
+                        title: Text(
+                          '${DateFormat('dd/MM/yyyy').format(l.dia)} — '
+                          '${_formatarDinheiro(l.ganho)}',
+                        ),
+                        subtitle: Text('Anjun ${l.anjun} • iMile ${l.imile}'),
+                        trailing: const Icon(Icons.edit_outlined, size: 20),
+                        onTap: () => _abrirLancamento(dia: l.dia),
+                      ),
+                    );
+                  }),
 
                   const SizedBox(height: 20),
 
