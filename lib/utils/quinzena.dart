@@ -1,7 +1,7 @@
 /// Pagamento é quinzenal: dia 1 ao 15, e dia 16 até o fim do mês. O
-/// dinheiro da quinzena não cai na hora — leva até 5 dias corridos depois
-/// do fim de cada quinzena (então até dia 20 pra 1ª quinzena, e até dia 5
-/// do mês seguinte pra 2ª). Compartilhado entre as telas de Financeiro e
+/// dinheiro da quinzena não cai na hora — leva até 5 dias úteis depois
+/// do fim de cada quinzena (em geral perto do dia 20 pra 1ª quinzena, e do
+/// dia 5 do mês seguinte pra 2ª). Compartilhado entre as telas de Financeiro e
 /// Relatórios pra não duplicar essa conta em mais de um lugar.
 library;
 
@@ -21,8 +21,21 @@ DateTime fimDaQuinzena(DateTime data) {
   return DateTime(ultimoDia.year, ultimoDia.month, ultimoDia.day);
 }
 
+/// Fim da quinzena + 5 dias ÚTEIS (sábado e domingo não contam). Feriados
+/// não são considerados.
 DateTime previsaoPagamento(DateTime fimQuinzena) {
-  return fimQuinzena.add(const Duration(days: 5));
+  var data = DateTime(fimQuinzena.year, fimQuinzena.month, fimQuinzena.day);
+  var restantes = 5;
+
+  while (restantes > 0) {
+    data = DateTime(data.year, data.month, data.day + 1);
+
+    if (data.weekday != DateTime.saturday && data.weekday != DateTime.sunday) {
+      restantes--;
+    }
+  }
+
+  return data;
 }
 
 bool mesmoDia(DateTime a, DateTime b) {

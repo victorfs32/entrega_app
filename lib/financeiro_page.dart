@@ -337,7 +337,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(
-                              'Até 5 dias corridos depois do fim da quinzena.',
+                              'Até 5 dias úteis depois do fim da quinzena.',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: colors.onSurfaceVariant,

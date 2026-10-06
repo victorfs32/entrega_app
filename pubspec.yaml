@@ -1,4 +1,4 @@
-name: entrega_app
+﻿name: entrega_app
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.35+40
+version: 1.0.36+41
 
 environment:
   sdk: ^3.12.1
@@ -53,13 +53,13 @@ dependencies:
   url_launcher: ^6.3.2
   path_provider: ^2.1.5
 
-  # Atualização automática pelo GitHub
+  # AtualizaÃ§Ã£o automÃ¡tica pelo GitHub
   package_info_plus: ^8.3.0
   dio: ^5.9.0
   open_filex: ^4.7.0
   permission_handler: ^11.3.1
 
-  # Gráficos do painel financeiro da Home
+  # GrÃ¡ficos do painel financeiro da Home
   fl_chart: ^1.1.1
 
 dev_dependencies:
@@ -88,7 +88,7 @@ flutter:
     - assets/branding/
 
   # Inter (tipografia do painel financeiro), embutida no app pra funcionar
-  # offline — não depende de baixar a fonte em tempo de execução.
+  # offline â€” nÃ£o depende de baixar a fonte em tempo de execuÃ§Ã£o.
   fonts:
     - family: Inter
       fonts:
