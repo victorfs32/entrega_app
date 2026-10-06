@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import 'services/lancamentos_service.dart';
+import 'ui/painel_financeiro.dart';
 
 /// Lançamento do dia: quantos pacotes foram entregues em cada empresa e o
 /// valor pago por pacote de cada uma. Lançar de novo numa data que já tem
@@ -394,35 +395,14 @@ class _LancamentoPageState extends State<LancamentoPage> {
                     valor: valorImileController,
                   ),
                   const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: colors.primaryContainer,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.payments_outlined,
-                          color: colors.onPrimaryContainer,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            '${anjun + imile} pacotes no dia',
-                            style: TextStyle(color: colors.onPrimaryContainer),
-                          ),
-                        ),
-                        Text(
-                          'R\$ ${_dinheiro(ganho)}',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: colors.onPrimaryContainer,
-                          ),
-                        ),
-                      ],
-                    ),
+                  PainelHero(
+                    rotulo: 'Ganho do dia',
+                    valor: ganho,
+                    apoio: '${anjun + imile} pacotes no dia',
+                    pilulas: [
+                      (Icons.local_shipping_outlined, 'Anjun $anjun'),
+                      (Icons.inventory_outlined, 'iMile $imile'),
+                    ],
                   ),
                   const SizedBox(height: 20),
                   SizedBox(

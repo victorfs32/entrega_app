@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'app_theme.dart';
 import 'lancamento_page.dart';
 import 'services/lancamentos_service.dart';
+import 'ui/painel_financeiro.dart';
 import 'utils/quinzena.dart' as quinzena;
 
 class FinanceiroPage extends StatefulWidget {
@@ -18,6 +19,14 @@ class FinanceiroPage extends StatefulWidget {
 class _FinanceiroPageState extends State<FinanceiroPage> {
   final valorController = TextEditingController();
   final observacaoController = TextEditingController();
+
+  // Streams criados uma vez só — um novo a cada build() re-assinaria o
+  // Firestore e piscava a tela.
+  final Stream<List<Lancamento>> _lancamentos = LancamentosService.ouvir();
+  late final Stream<QuerySnapshot> _pagamentos = FirebaseFirestore.instance
+      .collection('pagamentos')
+      .where('motoristaId', isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+      .snapshots();
   bool salvando = false;
 
   @override
@@ -156,7 +165,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
         label: const Text('Lançar o dia'),
       ),
       body: StreamBuilder<List<Lancamento>>(
-        stream: LancamentosService.ouvir(),
+        stream: _lancamentos,
         builder: (context, lancamentosSnap) {
           final lancamentos = lancamentosSnap.data ?? const <Lancamento>[];
 
@@ -172,10 +181,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
             // de motoristaId exigiria um índice composto no Firestore.
             // A lista é pequena (recebimentos manuais), então ordena
             // no cliente mesmo.
-            stream: FirebaseFirestore.instance
-                .collection('pagamentos')
-                .where('motoristaId', isEqualTo: usuario.uid)
-                .snapshots(),
+            stream: _pagamentos,
             builder: (context, pagamentosSnap) {
               if (pagamentosSnap.connectionState == ConnectionState.waiting &&
                   !pagamentosSnap.hasData) {
@@ -230,43 +236,29 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
               return ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                 children: [
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Resumo financeiro',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const Divider(height: 24),
-                          _linhaResumo(
-                            icon: Icons.inventory_2_outlined,
-                            titulo: 'Total ganho ($totalEntregas entregas)',
-                            valor: _formatarDinheiro(ganhoTotal),
-                            color: colors.primary,
-                          ),
-                          _linhaResumo(
-                            icon: Icons.check_circle_outline,
-                            titulo: 'Total já recebido',
-                            valor: _formatarDinheiro(totalRecebido),
-                            color: Colors.green,
-                          ),
-                          const Divider(height: 24),
-                          _linhaResumo(
-                            icon: Icons.account_balance_wallet_outlined,
-                            titulo: 'Saldo a receber',
-                            valor: _formatarDinheiro(saldo),
-                            color: saldo > 0 ? Colors.orange : colors.primary,
-                          ),
-                        ],
+                  PainelHero(
+                    rotulo: 'Saldo a receber',
+                    valor: saldo,
+                    apoio: '$totalEntregas pacotes lançados no total',
+                    pilulas: [
+                      (
+                        Icons.inventory_2_outlined,
+                        'Anjun ${resumoTotal.anjun}',
                       ),
-                    ),
+                      (Icons.inventory_outlined, 'iMile ${resumoTotal.imile}'),
+                    ],
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 14),
+
+                  FaixaMetricas(
+                    itens: [
+                      ('Total ganho', _formatarDinheiro(ganhoTotal)),
+                      ('Já recebido', _formatarDinheiro(totalRecebido)),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
 
                   Card(
                     child: Padding(
@@ -359,14 +351,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
 
                   const SizedBox(height: 20),
 
-                  Text(
-                    'Lançamentos do dia',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
+                  const TituloSecao('Lançamentos do dia'),
 
                   if (lancamentos.isEmpty)
                     const Padding(
@@ -448,14 +433,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
 
                   const SizedBox(height: 20),
 
-                  Text(
-                    'Recebimentos',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
+                  const TituloSecao('Recebimentos'),
 
                   if (docs.isEmpty)
                     const Padding(

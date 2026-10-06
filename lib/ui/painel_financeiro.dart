@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../app_theme.dart';
 import '../services/lancamentos_service.dart';
 import '../utils/quinzena.dart' as quinzena;
 
@@ -290,7 +291,7 @@ class LinhaMetricas extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
+        color: colors.painel,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: colors.outlineVariant.withValues(alpha: 0.55),
@@ -384,7 +385,7 @@ class GraficoGanhos extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
+        color: colors.painel,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: colors.outlineVariant.withValues(alpha: 0.55),
@@ -509,6 +510,196 @@ class GraficoGanhos extends StatelessWidget {
               curve: Curves.easeOutCubic,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Cartão de destaque genérico (mesmo degradê do cartão da Home): um
+/// rótulo, um valor grande em reais, uma linha de apoio e pílulas.
+class PainelHero extends StatelessWidget {
+  final String rotulo;
+  final double valor;
+  final String? apoio;
+  final List<(IconData, String)> pilulas;
+  final Widget? rodape;
+
+  const PainelHero({
+    super.key,
+    required this.rotulo,
+    required this.valor,
+    this.apoio,
+    this.pilulas = const [],
+    this.rodape,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0B1F44), Color(0xFF12397A), Color(0xFF1673D1)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1673D1).withValues(alpha: 0.28),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            rotulo.toUpperCase(),
+            style: _estilo(
+              tamanho: 11.5,
+              peso: FontWeight.w700,
+              cor: Colors.white.withValues(alpha: 0.72),
+              espacamento: 1.4,
+            ),
+          ),
+          const SizedBox(height: 10),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: _ValorAnimado(
+              valor: valor,
+              estilo: _estilo(
+                tamanho: 40,
+                peso: FontWeight.w800,
+                cor: Colors.white,
+                altura: 1.1,
+                espacamento: -1.0,
+              ),
+            ),
+          ),
+          if (apoio != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              apoio!,
+              style: _estilo(
+                tamanho: 13,
+                cor: Colors.white.withValues(alpha: 0.8),
+              ),
+            ),
+          ],
+          if (pilulas.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final p in pilulas) _Pilula(icone: p.$1, texto: p.$2),
+              ],
+            ),
+          ],
+          if (rodape != null) ...[const SizedBox(height: 16), rodape!],
+        ],
+      ),
+    );
+  }
+}
+
+/// Faixa com N métricas lado a lado (rótulo pequeno embaixo do valor).
+class FaixaMetricas extends StatelessWidget {
+  final List<(String rotulo, String valor)> itens;
+
+  const FaixaMetricas({super.key, required this.itens});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final divisoria = VerticalDivider(
+      width: 1,
+      color: colors.outlineVariant.withValues(alpha: 0.6),
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+      decoration: BoxDecoration(
+        color: colors.painel,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: colors.outlineVariant.withValues(alpha: 0.55),
+        ),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            for (var i = 0; i < itens.length; i++) ...[
+              if (i > 0) divisoria,
+              Expanded(
+                child: Column(
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        itens[i].$2,
+                        style: _estilo(
+                          tamanho: 19,
+                          peso: FontWeight.w700,
+                          cor: colors.onSurface,
+                          espacamento: -0.4,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      itens[i].$1,
+                      style: _estilo(tamanho: 12, cor: colors.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Título de seção no padrão do painel.
+class TituloSecao extends StatelessWidget {
+  final String texto;
+  final String? apoio;
+
+  const TituloSecao(this.texto, {super.key, this.apoio});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 18, 4, 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Text(
+            texto,
+            style: _estilo(
+              tamanho: 16,
+              peso: FontWeight.w700,
+              cor: colors.onSurface,
+              espacamento: -0.2,
+            ),
+          ),
+          if (apoio != null) ...[
+            const SizedBox(width: 8),
+            Text(
+              apoio!,
+              style: _estilo(tamanho: 12.5, cor: colors.onSurfaceVariant),
+            ),
+          ],
         ],
       ),
     );

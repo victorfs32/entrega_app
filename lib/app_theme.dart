@@ -141,8 +141,20 @@ class AppAccentColors extends ThemeExtension<AppAccentColors> {
   }
 }
 
+/// Fundo da tela e cor dos painéis/cartões — painéis claros (ou azul-noite
+/// no escuro) sobre um fundo levemente acinzentado, como no painel da Home.
+extension AppSuperficies on ColorScheme {
+  Color get fundoApp => brightness == Brightness.light
+      ? const Color(0xFFF3F6FB)
+      : const Color(0xFF0C1017);
+
+  Color get painel =>
+      brightness == Brightness.light ? Colors.white : const Color(0xFF151B26);
+}
+
 extension AppAccentColorsX on BuildContext {
-  AppAccentColors get accentColors => Theme.of(this).extension<AppAccentColors>()!;
+  AppAccentColors get accentColors =>
+      Theme.of(this).extension<AppAccentColors>()!;
 }
 
 class AppTheme {
@@ -153,10 +165,7 @@ class AppTheme {
 
   static ThemeData light() {
     return _build(
-      ColorScheme.fromSeed(
-        seedColor: _seedColor,
-        brightness: Brightness.light,
-      ),
+      ColorScheme.fromSeed(seedColor: _seedColor, brightness: Brightness.light),
       AppSemanticColors._light,
       AppAccentColors._light,
     );
@@ -164,10 +173,7 @@ class AppTheme {
 
   static ThemeData dark() {
     return _build(
-      ColorScheme.fromSeed(
-        seedColor: _seedColor,
-        brightness: Brightness.dark,
-      ),
+      ColorScheme.fromSeed(seedColor: _seedColor, brightness: Brightness.dark),
       AppSemanticColors._dark,
       AppAccentColors._dark,
     );
@@ -178,12 +184,18 @@ class AppTheme {
     AppSemanticColors semanticColors,
     AppAccentColors accentColors,
   ) {
-    final theme = ThemeData(colorScheme: colorScheme, useMaterial3: true);
+    // Inter (embutida em assets/fonts) em todo o app — mesma tipografia do
+    // painel financeiro da Home.
+    final theme = ThemeData(
+      colorScheme: colorScheme,
+      useMaterial3: true,
+      fontFamily: 'Inter',
+    );
     final borderRadius = BorderRadius.circular(_radius);
 
     return theme.copyWith(
       extensions: [semanticColors, accentColors],
-      scaffoldBackgroundColor: colorScheme.surface,
+      scaffoldBackgroundColor: colorScheme.fundoApp,
       visualDensity: VisualDensity.comfortable,
       dividerTheme: DividerThemeData(
         color: colorScheme.outlineVariant.withValues(alpha: 0.5),
@@ -202,23 +214,29 @@ class AppTheme {
       appBarTheme: AppBarTheme(
         centerTitle: true,
         elevation: 0,
-        scrolledUnderElevation: 1,
-        backgroundColor: colorScheme.surface,
+        scrolledUnderElevation: 0,
+        backgroundColor: colorScheme.fundoApp,
         foregroundColor: colorScheme.onSurface,
-        surfaceTintColor: colorScheme.surfaceTint,
+        surfaceTintColor: Colors.transparent,
         titleTextStyle: theme.textTheme.titleLarge?.copyWith(
-          fontWeight: FontWeight.w800,
+          fontFamily: 'Inter',
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.2,
           color: colorScheme.onSurface,
         ),
       ),
       cardTheme: CardThemeData(
         elevation: 0,
         margin: const EdgeInsets.symmetric(vertical: 6),
-        color: colorScheme.surfaceContainerLow,
+        color: colorScheme.painel,
         surfaceTintColor: Colors.transparent,
+        clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
-          borderRadius: borderRadius,
-          side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.6)),
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.55),
+          ),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -234,10 +252,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: borderRadius,
-          borderSide: BorderSide(
-            color: colorScheme.primary,
-            width: 1.4,
-          ),
+          borderSide: BorderSide(color: colorScheme.primary, width: 1.4),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -263,45 +278,33 @@ class AppTheme {
       ),
       listTileTheme: ListTileThemeData(
         iconColor: colorScheme.primary,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 6,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         elevation: 2,
         backgroundColor: colorScheme.primary,
         foregroundColor: colorScheme.onPrimary,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       navigationBarTheme: NavigationBarThemeData(
         height: 72,
         elevation: 0,
-        backgroundColor: colorScheme.surfaceContainer,
+        backgroundColor: colorScheme.painel,
         indicatorColor: colorScheme.primaryContainer,
         labelTextStyle: WidgetStateProperty.all(
-          const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
+          const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: colorScheme.surface,
-        surfaceTintColor: colorScheme.surfaceTint,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-        ),
+        backgroundColor: colorScheme.painel,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: colorScheme.inverseSurface,
         contentTextStyle: TextStyle(color: colorScheme.onInverseSurface),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
       switchTheme: SwitchThemeData(
         thumbIcon: WidgetStateProperty.resolveWith((states) {
