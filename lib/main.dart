@@ -19,6 +19,13 @@ import 'app_theme.dart';
 import 'login_page.dart';
 import 'manutencao_page.dart';
 import 'assinatura_gate.dart';
+import 'entrega_em_massa_page.dart';
+import 'financeiro_page.dart';
+import 'lancamento_page.dart';
+import 'relatorios_page.dart';
+import 'services/lancamentos_service.dart';
+import 'ui/painel_financeiro.dart';
+import 'utils/quinzena.dart' as quinzena;
 
 List<Pacote> listaPacotes = [];
 
@@ -193,6 +200,10 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   double valorPacote = 3.0;
   bool carregando = true;
+
+  // Criado uma vez só: um stream novo a cada build() re-assinaria o
+  // Firestore e piscava os números do painel a cada rebuild.
+  final Stream<List<Lancamento>> _lancamentos = LancamentosService.ouvir();
 
   String _iniciais(String nome) {
     final partes = nome.trim().split(' ').where((e) => e.isNotEmpty).toList();
@@ -502,54 +513,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  bool _mesmoDia(DateTime a, DateTime b) {
-    return a.day == b.day && a.month == b.month && a.year == b.year;
-  }
-
-  Widget _cardEstatistica({
-    required IconData icon,
-    required String titulo,
-    required String valor,
-    required Color backgroundColor,
-    required Color foregroundColor,
-    VoidCallback? onTap,
-  }) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      color: backgroundColor,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: foregroundColor),
-              const SizedBox(height: 10),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  valor,
-                  style: TextStyle(
-                    color: foregroundColor,
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                titulo,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: foregroundColor),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _linhaResumo({
     required IconData icon,
     required String texto,
@@ -581,49 +544,168 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _resumoDoDia({
-    required int entregasHoje,
-    required double ganhoHoje,
+  Future<void> _abrirLancamento({DateTime? dia}) async {
+    final salvou = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => LancamentoPage(diaInicial: dia)),
+    );
+
+    if (salvou == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lançamento salvo.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  void _abrirFinanceiro() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const FinanceiroPage()),
+    );
+  }
+
+  void _abrirRelatorios() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const RelatoriosPage()),
+    );
+  }
+
+  Future<void> _abrirEntregaEmMassa() async {
+    final liberado = await verificarAcessoLiberado(context);
+    if (!liberado || !mounted) return;
+
+    final quantidade = await Navigator.push<int>(
+      context,
+      MaterialPageRoute(builder: (_) => const EntregaEmMassaPage()),
+    );
+
+    if (!mounted) return;
+
+    if (quantidade != null && quantidade > 0) {
+      await _carregarEntregasFirebase();
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$quantidade pacote(s) registrados no lote.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  static String _dinheiro(double valor) =>
+      'R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}';
+
+  /// Chamada pra lançar o dia de hoje — ou o resumo dele, se já foi lançado.
+  Widget _cartaoLancamentoHoje(Lancamento? hoje) {
+    final colors = Theme.of(context).colorScheme;
+
+    if (hoje == null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Hoje ainda não foi lançado',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Informe quantos pacotes entregou em cada empresa.',
+                style: TextStyle(color: colors.onSurfaceVariant),
+              ),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: () => _abrirLancamento(),
+                icon: const Icon(Icons.add),
+                label: const Text('Lançar o dia de hoje'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      child: ListTile(
+        leading: Icon(Icons.check_circle, color: colors.primary),
+        title: Text('Hoje: ${_dinheiro(hoje.ganho)}'),
+        subtitle: Text('Anjun ${hoje.anjun} • iMile ${hoje.imile}'),
+        trailing: const Icon(Icons.edit_outlined),
+        onTap: () => _abrirLancamento(dia: hoje.dia),
+      ),
+    );
+  }
+
+  /// A baixa (bipar e guardar a foto/comprovante) continua aqui, mas como
+  /// recurso de apoio — o ganho vem dos lançamentos diários, não dela.
+  Widget _cartaoBaixas({
+    required int totalBaixas,
     required int fotosPendentes,
   }) {
-    const int metaDia = 80;
     final colors = Theme.of(context).colorScheme;
-    final progresso = entregasHoje / metaDia;
-    final progressoLimitado = progresso.clamp(0.0, 1.0).toDouble();
-    final porcentagem = (progresso * 100).clamp(0, 100).toInt();
-    final faltam = (metaDia - entregasHoje).clamp(0, metaDia);
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                Icon(Icons.qr_code_scanner, color: colors.secondary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Baixas e comprovantes',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
             Text(
-              'Resumo do dia',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              'Bipe pacotes e guarde a foto de cada entrega.',
+              style: TextStyle(color: colors.onSurfaceVariant),
             ),
-
-            const SizedBox(height: 16),
-
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: _abrirScanner,
+                    icon: const Icon(Icons.qr_code_scanner),
+                    label: const Text('Escanear'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: _abrirEntregaEmMassa,
+                    icon: const Icon(Icons.dynamic_feed),
+                    label: const Text('Em massa'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             _linhaResumo(
-              icon: Icons.inventory_2_outlined,
-              texto: '$entregasHoje entregas',
+              icon: Icons.list_alt,
+              texto: '$totalBaixas baixas registradas',
               color: colors.primary,
+              onTap: _abrirEntregas,
             ),
-
-            const SizedBox(height: 10),
-
-            _linhaResumo(
-              icon: Icons.payments_outlined,
-              texto: 'R\$ ${ganhoHoje.toStringAsFixed(2).replaceAll('.', ',')}',
-              color: colors.tertiary,
-            ),
-
-            const SizedBox(height: 10),
-
             _linhaResumo(
               icon: Icons.cloud_upload_outlined,
               texto: 'Fotos pendentes: $fotosPendentes',
@@ -639,33 +721,6 @@ class _HomePageState extends State<HomePage> {
                       );
                     },
             ),
-
-            const SizedBox(height: 18),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Meta: $entregasHoje/$metaDia'),
-                Text('$porcentagem%'),
-              ],
-            ),
-
-            const SizedBox(height: 8),
-
-            LinearProgressIndicator(
-              value: progressoLimitado,
-              minHeight: 12,
-              borderRadius: BorderRadius.circular(20),
-            ),
-
-            const SizedBox(height: 10),
-
-            Text(
-              faltam == 0
-                  ? 'Meta concluída!'
-                  : 'Faltam $faltam entregas para bater a meta',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
           ],
         ),
       ),
@@ -674,141 +729,110 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final hoje = DateTime.now();
-
-    final entregasHoje = listaPacotes.where((p) {
-      return p.entregue && _mesmoDia(p.dataLeitura, hoje);
-    }).length;
-
     final totalBaixas = listaPacotes.where((p) => p.entregue).length;
-    final ganhoHoje = entregasHoje * valorPacote;
-
-    final ultimasEntregas = listaPacotes
-        .where((p) => p.entregue)
-        .take(5)
-        .toList();
-
     final fotosPendentes = listaPacotes.where((p) {
       return p.entregue && p.fotoUrl == null;
     }).length;
-    final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      body: carregando
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _carregarEntregasFirebase,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 20),
+      body: RefreshIndicator(
+        onRefresh: _carregarEntregasFirebase,
+        child: StreamBuilder<List<Lancamento>>(
+          stream: _lancamentos,
+          builder: (context, snapshot) {
+            final lancamentos = snapshot.data ?? const <Lancamento>[];
 
-                    _topoUsuario(),
+            final agora = DateTime.now();
+            final hoje = DateTime(agora.year, agora.month, agora.day);
 
-                    const SizedBox(height: 25),
+            final resumoQuinzena = LancamentosService.somar(
+              lancamentos,
+              inicio: quinzena.inicioDaQuinzena(hoje),
+              fim: quinzena.fimDaQuinzena(hoje),
+            );
+            final resumoHoje = LancamentosService.somar(
+              lancamentos,
+              inicio: hoje,
+              fim: hoje,
+            );
+            final resumoMes = LancamentosService.somar(
+              lancamentos,
+              inicio: DateTime(hoje.year, hoje.month, 1),
+              fim: DateTime(hoje.year, hoje.month + 1, 0),
+            );
 
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _cardEstatistica(
-                            icon: Icons.done_all_outlined,
-                            titulo: 'Total\nBaixas',
-                            valor: '$totalBaixas',
-                            backgroundColor: context.accentColors.container(0),
-                            foregroundColor: context.accentColors.onContainer(
-                              0,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: _cardEstatistica(
-                            icon: Icons.inventory_2_outlined,
-                            titulo: 'Entregas\nHoje',
-                            valor: '$entregasHoje',
-                            backgroundColor: context.accentColors.container(1),
-                            foregroundColor: context.accentColors.onContainer(
-                              1,
-                            ),
-                            onTap: _abrirEntregas,
-                          ),
-                        ),
-                        Expanded(
-                          child: _cardEstatistica(
-                            icon: Icons.payments_outlined,
-                            titulo: 'Ganho\nHoje',
-                            valor:
-                                'R\$ ${ganhoHoje.toStringAsFixed(2).replaceAll('.', ',')}',
-                            backgroundColor: context.accentColors.container(2),
-                            foregroundColor: context.accentColors.onContainer(
-                              2,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+            Lancamento? lancamentoHoje;
+            for (final l in lancamentos) {
+              if (l.dia == hoje) {
+                lancamentoHoje = l;
+                break;
+              }
+            }
 
-                    const SizedBox(height: 20),
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 20),
 
-                    Text(
-                      "Últimas Entregas",
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                  _topoUsuario(),
 
-                    const SizedBox(height: 8),
+                  const SizedBox(height: 20),
 
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: ultimasEntregas.isEmpty
-                              ? [
-                                  const Padding(
-                                    padding: EdgeInsets.all(12),
-                                    child: Text("Nenhuma baixa registrada"),
-                                  ),
-                                ]
-                              : ultimasEntregas.map((pacote) {
-                                  return ListTile(
-                                    dense: true,
-                                    leading: const Icon(Icons.check_circle),
-                                    title: Text(pacote.codigo),
-                                    subtitle: Text(
-                                      pacote.transportadora ??
-                                          "Sem transportadora",
-                                    ),
-                                    trailing: Icon(
-                                      Icons.check_circle,
-                                      color: colors.primary,
-                                    ),
-                                  );
-                                }).toList(),
+                  HeroQuinzena(resumo: resumoQuinzena),
+
+                  const SizedBox(height: 14),
+
+                  LinhaMetricas(hoje: resumoHoje, mes: resumoMes),
+
+                  const SizedBox(height: 14),
+
+                  GraficoGanhos(lancamentos: lancamentos),
+
+                  const SizedBox(height: 14),
+
+                  _cartaoLancamentoHoje(lancamentoHoje),
+
+                  const SizedBox(height: 8),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _abrirFinanceiro,
+                          icon: const Icon(Icons.account_balance_wallet),
+                          label: const Text('Financeiro'),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _abrirRelatorios,
+                          icon: const Icon(Icons.bar_chart),
+                          label: const Text('Relatórios'),
+                        ),
+                      ),
+                    ],
+                  ),
 
-                    const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-                    _resumoDoDia(
-                      entregasHoje: entregasHoje,
-                      ganhoHoje: ganhoHoje,
-                      fotosPendentes: fotosPendentes,
-                    ),
-
-                    const SizedBox(height: 20),
-                  ],
-                ),
+                  _cartaoBaixas(
+                    totalBaixas: totalBaixas,
+                    fotosPendentes: fotosPendentes,
+                  ),
+                ],
               ),
-            ),
+            );
+          },
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _abrirScanner,
-        icon: const Icon(Icons.qr_code_scanner),
-        label: const Text('Escanear'),
+        onPressed: () => _abrirLancamento(),
+        icon: const Icon(Icons.add),
+        label: const Text('Lançar o dia'),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: 0,

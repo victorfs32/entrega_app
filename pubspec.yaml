@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.33+38
+version: 1.0.34+39
 
 environment:
   sdk: ^3.12.1
@@ -59,6 +59,9 @@ dependencies:
   open_filex: ^4.7.0
   permission_handler: ^11.3.1
 
+  # Gráficos do painel financeiro da Home
+  fl_chart: ^1.1.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -83,6 +86,22 @@ flutter:
 
   assets:
     - assets/branding/
+
+  # Inter (tipografia do painel financeiro), embutida no app pra funcionar
+  # offline — não depende de baixar a fonte em tempo de execução.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter_400Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter_500Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter_600SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter_700Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Inter_800ExtraBold.ttf
+          weight: 800
 
   # To add assets to your application, add an assets section, like this:
   # assets:
