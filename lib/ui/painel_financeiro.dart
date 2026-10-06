@@ -88,7 +88,130 @@ class _Pilula extends StatelessWidget {
 class HeroQuinzena extends StatelessWidget {
   final ResumoLancamentos resumo;
 
-  const HeroQuinzena({super.key, required this.resumo});
+  /// Meta de ganho da quinzena (null = sem meta) e o toque pra defini-la.
+  final double? meta;
+  final VoidCallback? onEditarMeta;
+
+  const HeroQuinzena({
+    super.key,
+    required this.resumo,
+    this.meta,
+    this.onEditarMeta,
+  });
+
+  Widget _blocoMeta(int diasRestantes) {
+    final alvo = meta;
+
+    if (alvo == null) {
+      return InkWell(
+        onTap: onEditarMeta,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.flag_outlined, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Definir meta da quinzena',
+                  style: _estilo(
+                    tamanho: 13,
+                    peso: FontWeight.w600,
+                    cor: Colors.white,
+                  ),
+                ),
+              ),
+              const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final atingida = resumo.ganho >= alvo;
+    final percentual = (resumo.ganho / alvo).clamp(0.0, 1.0);
+    final falta = alvo - resumo.ganho;
+
+    String apoio;
+    if (atingida) {
+      apoio = 'Meta batida! 🎉';
+    } else if (diasRestantes > 0) {
+      apoio =
+          'Faltam ${_dinheiro(falta)} • ${_dinheiro(falta / diasRestantes)} por dia';
+    } else {
+      apoio = 'Faltaram ${_dinheiro(falta)}';
+    }
+
+    return InkWell(
+      onTap: onEditarMeta,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.flag_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Meta ${_dinheiro(alvo)}',
+                    style: _estilo(
+                      tamanho: 13,
+                      cor: Colors.white.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ),
+                Text(
+                  '${(resumo.ganho / alvo * 100).floor()}%',
+                  style: _estilo(
+                    tamanho: 14,
+                    peso: FontWeight.w800,
+                    cor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: percentual),
+                duration: const Duration(milliseconds: 900),
+                curve: Curves.easeOutCubic,
+                builder: (context, valor, _) => LinearProgressIndicator(
+                  value: valor,
+                  minHeight: 8,
+                  backgroundColor: Colors.white.withValues(alpha: 0.18),
+                  valueColor: AlwaysStoppedAnimation(
+                    atingida ? const Color(0xFF6EE7A8) : Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              apoio,
+              style: _estilo(
+                tamanho: 12,
+                cor: Colors.white.withValues(alpha: 0.78),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -184,7 +307,9 @@ class HeroQuinzena extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 18),
+          _blocoMeta(diasRestantes),
+          const SizedBox(height: 18),
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: LinearProgressIndicator(

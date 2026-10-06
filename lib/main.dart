@@ -204,6 +204,71 @@ class _HomePageState extends State<HomePage> {
   // Criado uma vez só: um stream novo a cada build() re-assinaria o
   // Firestore e piscava os números do painel a cada rebuild.
   final Stream<List<Lancamento>> _lancamentos = LancamentosService.ouvir();
+  final Stream<double?> _meta = LancamentosService.ouvirMeta();
+
+  Future<void> _editarMeta(double? atual) async {
+    final controller = TextEditingController(
+      text: atual == null
+          ? ''
+          : atual.toStringAsFixed(2).replaceAll('.', ','),
+    );
+
+    final resultado = await showDialog<double?>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Meta da quinzena'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Quanto quer ganhar',
+            prefixText: 'R\$ ',
+            hintText: '3000',
+          ),
+        ),
+        actions: [
+          if (atual != null)
+            TextButton(
+              onPressed: () => Navigator.pop(context, 0.0),
+              child: const Text('Remover'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              // "3.000,50" (pt-BR) ou "3000.50" — só tira o ponto de
+              // milhar quando há vírgula decimal.
+              final texto = controller.text.trim();
+              final valor = double.tryParse(
+                texto.contains(',')
+                    ? texto.replaceAll('.', '').replaceAll(',', '.')
+                    : texto,
+              );
+              Navigator.pop(context, valor != null && valor > 0 ? valor : null);
+            },
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+
+    // null = cancelou (ou valor inválido); 0 = remover a meta.
+    if (resultado == null) return;
+
+    try {
+      await LancamentosService.definirMeta(resultado);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível salvar a meta agora.')),
+      );
+    }
+  }
 
   String _iniciais(String nome) {
     final partes = nome.trim().split(' ').where((e) => e.isNotEmpty).toList();
@@ -781,7 +846,14 @@ class _HomePageState extends State<HomePage> {
 
                   const SizedBox(height: 20),
 
-                  HeroQuinzena(resumo: resumoQuinzena),
+                  StreamBuilder<double?>(
+                    stream: _meta,
+                    builder: (context, metaSnapshot) => HeroQuinzena(
+                      resumo: resumoQuinzena,
+                      meta: metaSnapshot.data,
+                      onEditarMeta: () => _editarMeta(metaSnapshot.data),
+                    ),
+                  ),
 
                   const SizedBox(height: 14),
 

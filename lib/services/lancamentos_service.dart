@@ -80,6 +80,37 @@ class LancamentosService {
         });
   }
 
+  /// Meta de ganho por quinzena, guardada no perfil do motorista (assim o
+  /// dashboard enxerga a mesma meta). `null` quando não foi definida.
+  static Stream<double?> ouvirMeta() {
+    final usuario = FirebaseAuth.instance.currentUser;
+    if (usuario == null) return Stream.value(null);
+
+    return FirebaseFirestore.instance
+        .collection('motoristas')
+        .doc(usuario.uid)
+        .snapshots()
+        .map((doc) {
+          final meta = (doc.data()?['metaQuinzena'] as num?)?.toDouble();
+          return meta != null && meta > 0 ? meta : null;
+        });
+  }
+
+  /// Define a meta da quinzena; `null` (ou 0) remove.
+  static Future<void> definirMeta(double? meta) {
+    final usuario = FirebaseAuth.instance.currentUser;
+    if (usuario == null) return Future.value();
+
+    return FirebaseFirestore.instance
+        .collection('motoristas')
+        .doc(usuario.uid)
+        .update({
+          'metaQuinzena': meta != null && meta > 0
+              ? meta
+              : FieldValue.delete(),
+        });
+  }
+
   /// Cria ou substitui o lançamento do dia (um por motorista por dia —
   /// lançar de novo na mesma data corrige o anterior).
   static Future<void> salvar({

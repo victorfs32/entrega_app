@@ -51,7 +51,13 @@ service cloud.firestore {
          (!('valorAnjun' in request.resource.data) ||
           (request.resource.data.valorAnjun is number && request.resource.data.valorAnjun > 0)) &&
          (!('valorImile' in request.resource.data) ||
-          (request.resource.data.valorImile is number && request.resource.data.valorImile > 0)));
+          (request.resource.data.valorImile is number && request.resource.data.valorImile > 0)))
+        ||
+        // Meta de ganho por quinzena, definida pelo próprio motorista.
+        (autenticado() && request.auth.uid == uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['metaQuinzena']) &&
+         (!('metaQuinzena' in request.resource.data) ||
+          (request.resource.data.metaQuinzena is number && request.resource.data.metaQuinzena > 0)));
       // Autocadastro: o próprio usuário recém-autenticado pode criar o
       // documento do seu perfil (tela de Cadastro no app) — mas nunca
       // como admin, senão qualquer um que se cadastrasse ganharia acesso
