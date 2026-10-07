@@ -9,13 +9,15 @@ import 'package:intl/intl.dart';
 import 'services/lancamentos_service.dart';
 import 'ui/painel_financeiro.dart';
 
-/// Lançamento do dia: quantos pacotes foram entregues em cada empresa e o
-/// valor pago por pacote de cada uma. Lançar de novo numa data que já tem
-/// lançamento edita o que já existe.
+/// Lançamento: quantos pacotes foram entregues em cada empresa e o valor
+/// pago por pacote de cada uma. Cada vez que abre sem [lancamento] cria um
+/// lançamento novo — um dia pode ter vários (rota da manhã, da tarde...) e o
+/// ganho do dia é a soma. Com [lancamento], edita aquele.
 class LancamentoPage extends StatefulWidget {
   final DateTime? diaInicial;
+  final Lancamento? lancamento;
 
-  const LancamentoPage({super.key, this.diaInicial});
+  const LancamentoPage({super.key, this.diaInicial, this.lancamento});
 
   @override
   State<LancamentoPage> createState() => _LancamentoPageState();
@@ -38,26 +40,22 @@ class _LancamentoPageState extends State<LancamentoPage> {
 
   bool carregandoValores = true;
   bool salvando = false;
-  bool _primeiraCargaFeita = false;
+
+  Lancamento? get _editando => widget.lancamento;
 
   @override
   void initState() {
     super.initState();
 
-    final base = widget.diaInicial ?? DateTime.now();
+    final base = _editando?.dia ?? widget.diaInicial ?? DateTime.now();
     dia = DateTime(base.year, base.month, base.day);
 
     _carregarValoresDoPerfil();
 
+    // Só pra avisar quanto o dia já tem lançado; não mexe nos campos.
     _assinatura = LancamentosService.ouvir().listen((lista) {
       if (!mounted) return;
-      existentes = lista;
-      // Só preenche sozinho na primeira carga (ou ao trocar a data) — não
-      // sobrescreve o que o motorista está digitando a cada atualização.
-      if (!_primeiraCargaFeita) {
-        _primeiraCargaFeita = true;
-        _preencherDoDia();
-      }
+      setState(() => existentes = lista);
     });
   }
 
@@ -108,25 +106,18 @@ class _LancamentoPageState extends State<LancamentoPage> {
 
     setState(() {
       carregandoValores = false;
-      _preencherDoDia();
+      _preencherCampos();
     });
   }
 
-  Lancamento? _lancamentoDoDia() {
-    for (final l in existentes) {
-      if (l.dia == dia) return l;
-    }
-    return null;
-  }
-
-  void _preencherDoDia() {
-    final existente = _lancamentoDoDia();
+  /// Lançamento sendo editado usa os valores dele (histórico fiel); um novo
+  /// começa vazio, com os valores atuais do perfil.
+  void _preencherCampos() {
+    final existente = _editando;
 
     anjunController.text = existente != null ? '${existente.anjun}' : '';
     imileController.text = existente != null ? '${existente.imile}' : '';
 
-    // Dia já lançado usa os valores daquele lançamento (histórico fiel);
-    // dia novo parte dos valores atuais do perfil.
     final valorAnjun = existente != null && existente.valorAnjun > 0
         ? existente.valorAnjun
         : _valorAnjunPerfil;
@@ -136,8 +127,14 @@ class _LancamentoPageState extends State<LancamentoPage> {
 
     valorAnjunController.text = _dinheiro(valorAnjun);
     valorImileController.text = _dinheiro(valorImile);
+  }
 
-    if (mounted) setState(() {});
+  /// Outros lançamentos já feitos na data escolhida (sem contar o que está
+  /// sendo editado).
+  List<Lancamento> _outrosDoDia() {
+    return existentes
+        .where((l) => l.dia == dia && l.id != _editando?.id)
+        .toList();
   }
 
   int _inteiro(TextEditingController c) => int.tryParse(c.text.trim()) ?? 0;
@@ -159,7 +156,6 @@ class _LancamentoPageState extends State<LancamentoPage> {
 
     setState(() {
       dia = DateTime(escolhida.year, escolhida.month, escolhida.day);
-      _preencherDoDia();
     });
   }
 
@@ -188,6 +184,7 @@ class _LancamentoPageState extends State<LancamentoPage> {
 
     try {
       await LancamentosService.salvar(
+        id: _editando?.id,
         dia: dia,
         anjun: anjun,
         imile: imile,
@@ -227,7 +224,7 @@ class _LancamentoPageState extends State<LancamentoPage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Apagar lançamento?'),
         content: Text(
-          'O lançamento de ${DateFormat('dd/MM/yyyy').format(dia)} será '
+          'Esse lançamento de ${DateFormat('dd/MM/yyyy').format(dia)} será '
           'removido do seu financeiro.',
         ),
         actions: [
@@ -246,7 +243,7 @@ class _LancamentoPageState extends State<LancamentoPage> {
     if (confirmar != true) return;
 
     try {
-      await LancamentosService.apagar(dia);
+      await LancamentosService.apagar(_editando?.id ?? '');
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
@@ -334,16 +331,18 @@ class _LancamentoPageState extends State<LancamentoPage> {
     final valorImile = _decimal(valorImileController) ?? 0;
     final ganho = anjun * valorAnjun + imile * valorImile;
 
-    final existente = _lancamentoDoDia();
+    final editando = _editando;
+    final outros = _outrosDoDia();
+    final ganhoOutros = outros.fold<double>(0, (soma, l) => soma + l.ganho);
     final hoje = DateTime.now();
     final ehHoje =
         dia.year == hoje.year && dia.month == hoje.month && dia.day == hoje.day;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Lançar o dia'),
+        title: Text(editando != null ? 'Editar lançamento' : 'Novo lançamento'),
         actions: [
-          if (existente != null)
+          if (editando != null)
             IconButton(
               tooltip: 'Apagar lançamento',
               icon: const Icon(Icons.delete_outline),
@@ -371,8 +370,10 @@ class _LancamentoPageState extends State<LancamentoPage> {
                                   '${DateFormat('dd/MM/yyyy').format(dia)}',
                       ),
                       subtitle: Text(
-                        existente != null
-                            ? 'Já lançado — salvar atualiza esse dia'
+                        outros.isNotEmpty
+                            ? 'Esse dia já tem ${outros.length} '
+                                  'lançamento${outros.length == 1 ? '' : 's'} '
+                                  '(R\$ ${_dinheiro(ganhoOutros)}) — este será somado'
                             : 'Toque pra escolher outra data',
                       ),
                       trailing: const Icon(Icons.edit_calendar_outlined),
@@ -396,9 +397,12 @@ class _LancamentoPageState extends State<LancamentoPage> {
                   ),
                   const SizedBox(height: 10),
                   PainelHero(
-                    rotulo: 'Ganho do dia',
+                    rotulo: 'Ganho deste lançamento',
                     valor: ganho,
-                    apoio: '${anjun + imile} pacotes no dia',
+                    apoio: outros.isEmpty
+                        ? '${anjun + imile} pacotes'
+                        : '${anjun + imile} pacotes • dia fica com '
+                              'R\$ ${_dinheiro(ganhoOutros + ganho)}',
                     pilulas: [
                       (Icons.local_shipping_outlined, 'Anjun $anjun'),
                       (Icons.inventory_outlined, 'iMile $imile'),
@@ -417,7 +421,7 @@ class _LancamentoPageState extends State<LancamentoPage> {
                             )
                           : const Icon(Icons.check),
                       label: Text(
-                        existente != null
+                        editando != null
                             ? 'Atualizar lançamento'
                             : 'Salvar lançamento',
                       ),

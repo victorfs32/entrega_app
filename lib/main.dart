@@ -609,10 +609,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> _abrirLancamento({DateTime? dia}) async {
+  Future<void> _abrirLancamento({DateTime? dia, Lancamento? lancamento}) async {
     final salvou = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => LancamentoPage(diaInicial: dia)),
+      MaterialPageRoute(
+        builder: (_) => LancamentoPage(diaInicial: dia, lancamento: lancamento),
+      ),
     );
 
     if (salvou == true && mounted) {
@@ -667,10 +669,11 @@ class _HomePageState extends State<HomePage> {
       'R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}';
 
   /// Chamada pra lançar o dia de hoje — ou o resumo dele, se já foi lançado.
-  Widget _cartaoLancamentoHoje(Lancamento? hoje) {
+  /// Hoje pode ter vários lançamentos; o total é a soma e cada um é editável.
+  Widget _cartaoLancamentoHoje(List<Lancamento> hoje) {
     final colors = Theme.of(context).colorScheme;
 
-    if (hoje == null) {
+    if (hoje.isEmpty) {
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -700,13 +703,43 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
+    final totalGanho = hoje.fold<double>(0, (soma, l) => soma + l.ganho);
+
     return Card(
-      child: ListTile(
-        leading: Icon(Icons.check_circle, color: colors.primary),
-        title: Text('Hoje: ${_dinheiro(hoje.ganho)}'),
-        subtitle: Text('Anjun ${hoje.anjun} • iMile ${hoje.imile}'),
-        trailing: const Icon(Icons.edit_outlined),
-        onTap: () => _abrirLancamento(dia: hoje.dia),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          children: [
+            ListTile(
+              leading: Icon(Icons.check_circle, color: colors.primary),
+              title: Text('Hoje: ${_dinheiro(totalGanho)}'),
+              subtitle: Text(
+                hoje.length == 1
+                    ? 'Anjun ${hoje.first.anjun} • iMile ${hoje.first.imile}'
+                    : '${hoje.length} lançamentos',
+              ),
+              trailing: FilledButton.tonalIcon(
+                onPressed: () => _abrirLancamento(),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Outro'),
+              ),
+            ),
+            for (var i = 0; i < hoje.length; i++)
+              ListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.only(left: 72, right: 16),
+                title: Text(
+                  '${i + 1}º • ${_dinheiro(hoje[i].ganho)}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  'Anjun ${hoje[i].anjun} • iMile ${hoje[i].imile}',
+                ),
+                trailing: const Icon(Icons.edit_outlined, size: 18),
+                onTap: () => _abrirLancamento(lancamento: hoje[i]),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -826,13 +859,9 @@ class _HomePageState extends State<HomePage> {
               fim: DateTime(hoje.year, hoje.month + 1, 0),
             );
 
-            Lancamento? lancamentoHoje;
-            for (final l in lancamentos) {
-              if (l.dia == hoje) {
-                lancamentoHoje = l;
-                break;
-              }
-            }
+            final lancamentosHoje = lancamentos
+                .where((l) => l.dia == hoje)
+                .toList();
 
             return SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -865,7 +894,7 @@ class _HomePageState extends State<HomePage> {
 
                   const SizedBox(height: 14),
 
-                  _cartaoLancamentoHoje(lancamentoHoje),
+                  _cartaoLancamentoHoje(lancamentosHoje),
 
                   const SizedBox(height: 8),
 

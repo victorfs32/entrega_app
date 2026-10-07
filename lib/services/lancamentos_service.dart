@@ -11,6 +11,9 @@ import 'package:intl/intl.dart';
 /// perfil), então mudar o valor depois não reescreve o ganho de dias já
 /// lançados.
 class Lancamento {
+  /// Id do documento — um dia pode ter vários lançamentos (ex.: rota da
+  /// manhã e da tarde), então o dia sozinho não identifica o lançamento.
+  final String id;
   final DateTime dia;
   final int anjun;
   final int imile;
@@ -18,6 +21,7 @@ class Lancamento {
   final double valorImile;
 
   const Lancamento({
+    this.id = '',
     required this.dia,
     required this.anjun,
     required this.imile,
@@ -29,7 +33,7 @@ class Lancamento {
 
   double get ganho => anjun * valorAnjun + imile * valorImile;
 
-  factory Lancamento.fromMap(Map<String, dynamic> dados) {
+  factory Lancamento.fromMap(Map<String, dynamic> dados, {String id = ''}) {
     final diaTexto = (dados['dia'] ?? '').toString();
     final dia =
         DateTime.tryParse(diaTexto) ??
@@ -41,6 +45,7 @@ class Lancamento {
     }
 
     return Lancamento(
+      id: id,
       dia: DateTime(dia.year, dia.month, dia.day),
       anjun: (dados['anjun'] as num?)?.toInt() ?? 0,
       imile: (dados['imile'] as num?)?.toInt() ?? 0,
@@ -57,11 +62,9 @@ class LancamentosService {
 
   static String chaveDoDia(DateTime dia) => _formatoDia.format(dia);
 
-  static String _idDoc(String uid, DateTime dia) => '${uid}_${chaveDoDia(dia)}';
-
   /// Todos os lançamentos do motorista logado, do mais recente pro mais
-  /// antigo. É no máximo um por dia, então a lista cresce devagar — dá
-  /// pra ouvir tudo de uma vez sem paginar. Só filtra por motoristaId
+  /// antigo. Poucos por dia, então a lista cresce devagar — dá pra ouvir
+  /// tudo de uma vez sem paginar. Só filtra por motoristaId
   /// (igualdade simples, sem índice composto) e ordena aqui no cliente.
   static Stream<List<Lancamento>> ouvir() {
     final usuario = FirebaseAuth.instance.currentUser;
@@ -73,7 +76,7 @@ class LancamentosService {
         .snapshots()
         .map((snap) {
           final lista = snap.docs
-              .map((doc) => Lancamento.fromMap(doc.data()))
+              .map((doc) => Lancamento.fromMap(doc.data(), id: doc.id))
               .toList();
           lista.sort((a, b) => b.dia.compareTo(a.dia));
           return lista;
@@ -111,9 +114,11 @@ class LancamentosService {
         });
   }
 
-  /// Cria ou substitui o lançamento do dia (um por motorista por dia —
-  /// lançar de novo na mesma data corrige o anterior).
+  /// Cria um lançamento novo ([id] nulo) ou corrige um existente. Um mesmo
+  /// dia pode ter quantos lançamentos o motorista quiser; o ganho do dia é a
+  /// soma deles.
   static Future<void> salvar({
+    String? id,
     required DateTime dia,
     required int anjun,
     required int imile,
@@ -125,29 +130,29 @@ class LancamentosService {
 
     final diaLimpo = DateTime(dia.year, dia.month, dia.day);
 
-    await FirebaseFirestore.instance
-        .collection('lancamentos')
-        .doc(_idDoc(usuario.uid, diaLimpo))
-        .set({
-          'motoristaId': usuario.uid,
-          'dia': chaveDoDia(diaLimpo),
-          'data': Timestamp.fromDate(diaLimpo),
-          'anjun': anjun,
-          'imile': imile,
-          'valorAnjun': valorAnjun,
-          'valorImile': valorImile,
-          'atualizadoEm': Timestamp.now(),
-        });
+    final colecao = FirebaseFirestore.instance.collection('lancamentos');
+    final dados = {
+      'motoristaId': usuario.uid,
+      'dia': chaveDoDia(diaLimpo),
+      'data': Timestamp.fromDate(diaLimpo),
+      'anjun': anjun,
+      'imile': imile,
+      'valorAnjun': valorAnjun,
+      'valorImile': valorImile,
+      'atualizadoEm': Timestamp.now(),
+    };
+
+    if (id == null || id.isEmpty) {
+      await colecao.add(dados);
+    } else {
+      await colecao.doc(id).set(dados);
+    }
   }
 
-  static Future<void> apagar(DateTime dia) async {
-    final usuario = FirebaseAuth.instance.currentUser;
-    if (usuario == null) return;
+  static Future<void> apagar(String id) async {
+    if (FirebaseAuth.instance.currentUser == null || id.isEmpty) return;
 
-    await FirebaseFirestore.instance
-        .collection('lancamentos')
-        .doc(_idDoc(usuario.uid, dia))
-        .delete();
+    await FirebaseFirestore.instance.collection('lancamentos').doc(id).delete();
   }
 
   /// Soma dos lançamentos cujo dia cai em [inicio]..[fim] (inclusive).

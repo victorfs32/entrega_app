@@ -36,10 +36,12 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
     super.dispose();
   }
 
-  Future<void> _abrirLancamento({DateTime? dia}) async {
+  Future<void> _abrirLancamento({DateTime? dia, Lancamento? lancamento}) async {
     final salvou = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => LancamentoPage(diaInicial: dia)),
+      MaterialPageRoute(
+        builder: (_) => LancamentoPage(diaInicial: dia, lancamento: lancamento),
+      ),
     );
 
     if (salvou == true && mounted) {
@@ -373,7 +375,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
                         ),
                         subtitle: Text('Anjun ${l.anjun} • iMile ${l.imile}'),
                         trailing: const Icon(Icons.edit_outlined, size: 20),
-                        onTap: () => _abrirLancamento(dia: l.dia),
+                        onTap: () => _abrirLancamento(lancamento: l),
                       ),
                     );
                   }),
