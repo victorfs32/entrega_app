@@ -36,7 +36,14 @@ class _ValorAnimado extends StatelessWidget {
   final double valor;
   final TextStyle estilo;
 
-  const _ValorAnimado({required this.valor, required this.estilo});
+  /// false mostra só o número inteiro (contagens), sem R$.
+  final bool dinheiro;
+
+  const _ValorAnimado({
+    required this.valor,
+    required this.estilo,
+    this.dinheiro = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +51,10 @@ class _ValorAnimado extends StatelessWidget {
       tween: Tween<double>(begin: 0, end: valor),
       duration: const Duration(milliseconds: 900),
       curve: Curves.easeOutCubic,
-      builder: (context, atual, _) => Text(_dinheiro(atual), style: estilo),
+      builder: (context, atual, _) => Text(
+        dinheiro ? _dinheiro(atual) : atual.round().toString(),
+        style: estilo,
+      ),
     );
   }
 }
@@ -650,10 +660,14 @@ class PainelHero extends StatelessWidget {
   final List<(IconData, String)> pilulas;
   final Widget? rodape;
 
+  /// false mostra o valor como contagem (sem R$).
+  final bool dinheiro;
+
   const PainelHero({
     super.key,
     required this.rotulo,
     required this.valor,
+    this.dinheiro = true,
     this.apoio,
     this.pilulas = const [],
     this.rodape,
@@ -697,6 +711,7 @@ class PainelHero extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: _ValorAnimado(
               valor: valor,
+              dinheiro: dinheiro,
               estilo: _estilo(
                 tamanho: 40,
                 peso: FontWeight.w800,

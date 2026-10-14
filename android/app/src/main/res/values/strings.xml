@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="leitor_tela_descricao">Lê os textos da tela do app de rotas que você escolher (por exemplo o Circuit) para o Baixa Fácil mostrar a parada de cada pacote. Só funciona enquanto a leitura estiver ligada e não lê nenhum outro app.</string>
+</resources>

@@ -8,6 +8,7 @@ import 'relatorios_page.dart';
 import 'configuracoes_page.dart';
 import 'perfil_page.dart';
 import 'entrega_em_massa_page.dart';
+import 'leitor_rota_page.dart';
 import 'services/sincronizacao_fotos_service.dart';
 
 class MenuPage extends StatefulWidget {
@@ -178,7 +179,7 @@ class _MenuPageState extends State<MenuPage> {
       appBar: AppBar(title: const Text('Menu'), centerTitle: true),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
+        child: ListView(
           children: [
             _itemMenu(
               icon: Icons.person,
@@ -225,6 +226,18 @@ class _MenuPageState extends State<MenuPage> {
                     ),
                   );
                 }
+              },
+            ),
+            _itemMenu(
+              icon: Icons.alt_route,
+              titulo: 'Rota do Circuit',
+              subtitulo: 'Ler a rota de outro app e achar a parada de cada pacote',
+              cor: 4,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LeitorRotaPage()),
+                );
               },
             ),
             _itemMenu(
