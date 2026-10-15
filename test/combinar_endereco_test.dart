@@ -67,6 +67,48 @@ Tel (85) 99999-0000
     expect(achadas.first.parada.id, '3');
   });
 
+  test('etiqueta real do celular (OCR com ruído e palavra quebrada)', () {
+    // Texto lido de uma etiqueta de verdade: o "Rua" veio partido em duas
+    // linhas e há muito texto em volta.
+    const etiqueta = '''
+Retetente
+TO
+2809 28 27
+Dolbvey
+Eris Rua Shes Carein8: Sao paulo Sae Paulc, 0300
+Cleozinha 2..
+casa cinza porta grarde, Coaçu Ru
+a dos Girassóis 125, Eusébio, Cear
+a, 6 771320
+dTikTok Shop 61771320
+3320122157217
+0.460 KG
+''';
+
+    const rota = [
+      ...paradas,
+      Parada(
+        id: '16',
+        endereco: 'Rua dos Girassóis, 125',
+        local: 'Prq Res Estr Do Fio, Eusébio, 61760-000',
+      ),
+    ];
+
+    final achadas = CombinarEndereco.procurar(etiqueta, rota);
+
+    expect(achadas, isNotEmpty);
+    expect(achadas.first.parada.id, '16');
+    expect(achadas.first.exata, isTrue);
+  });
+
+  test('nome da rua partido em duas linhas ainda é achado', () {
+    const etiqueta = 'Rua das Pal\nmeiras, 55\nCoaçu';
+
+    const rota = [Parada(id: '9', endereco: 'Rua das Palmeiras, 55')];
+
+    expect(CombinarEndereco.procurar(etiqueta, rota).first.parada.id, '9');
+  });
+
   test('etiqueta de endereço que não está na rota não casa com nada', () {
     const etiqueta = 'Rua das Palmeiras, 55\nFortaleza - CE';
 

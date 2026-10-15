@@ -40,6 +40,10 @@ class CombinarEndereco {
     final numeros = palavras.where((p) => RegExp(r'^\d+$').hasMatch(p)).toSet();
     final soDigitos = texto.replaceAll(RegExp(r'\D'), '');
 
+    // Texto sem espaços nem pontuação: pega nomes que a etiqueta quebrou em
+    // duas linhas ("Pal" / "meiras").
+    final compacto = texto.replaceAll(RegExp(r'[^a-z0-9]'), '');
+
     final candidatas = <ParadaCandidata>[];
 
     for (final parada in paradas) {
@@ -58,7 +62,9 @@ class CombinarEndereco {
 
       if (termos.isEmpty) continue;
 
-      final achados = termos.where((t) => _aparece(t, palavras)).length;
+      final achados = termos
+          .where((t) => _aparece(t, palavras, compacto))
+          .length;
       final fracao = achados / termos.length;
 
       final numeroBate = numero != null && numeros.contains(numero);
@@ -92,7 +98,10 @@ class CombinarEndereco {
 
   // O termo aparece entre as palavras da etiqueta, aceitando 1 letra errada
   // (2 em palavras longas) por causa de erros de leitura.
-  static bool _aparece(String termo, List<String> palavras) {
+  static bool _aparece(String termo, List<String> palavras, String compacto) {
+    // Termos longos o bastante pra não bater por acaso no texto corrido.
+    if (termo.length >= 6 && compacto.contains(termo)) return true;
+
     final tolerancia = termo.length >= 9 ? 2 : (termo.length >= 5 ? 1 : 0);
 
     for (final palavra in palavras) {
