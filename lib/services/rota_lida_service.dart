@@ -464,16 +464,16 @@ class RotaLidaService {
   /// Paradas cujo endereço contém todas as palavras digitadas (sem
   /// diferenciar maiúsculas nem acentos).
   List<Parada> buscarPorEndereco(String texto) {
-    final palavras = _normalizar(texto).split(' ').where((p) => p.isNotEmpty);
+    final palavras = normalizar(texto).split(' ').where((p) => p.isNotEmpty);
     if (palavras.isEmpty) return const [];
 
     return paradas.where((p) {
-      final alvo = _normalizar('${p.endereco} ${p.local ?? ''}');
+      final alvo = normalizar('${p.endereco} ${p.local ?? ''}');
       return palavras.every(alvo.contains);
     }).toList();
   }
 
-  static String _normalizar(String texto) {
+  static String normalizar(String texto) {
     const de = 'áàâãäéèêëíìîïóòôõöúùûüçñ';
     const para = 'aaaaaeeeeiiiiooooouuuucn';
 

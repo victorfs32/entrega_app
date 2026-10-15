@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import 'services/etiqueta_ocr_service.dart';
 import 'services/rota_lida_service.dart';
 import 'utils/codigo_rastreio.dart';
+import 'utils/combinar_endereco.dart';
 
-/// Acha a parada da rota (lida do outro app) de um pacote: bipando o código,
-/// quando o outro app mostra o código junto da parada, ou digitando parte do
-/// endereço (rua, número) — que é o que está na etiqueta do pacote.
+/// Acha a parada da rota (lida do outro app) de um pacote. Bipou o código:
+/// se o outro app mostra o código junto da parada, é direto; senão o app lê
+/// o endereço impresso na etiqueta (OCR, no próprio celular) e procura a
+/// parada com esse endereço. Dá pra digitar o endereço também.
 class AchaParadaPage extends StatefulWidget {
   const AchaParadaPage({super.key});
 
@@ -20,14 +23,24 @@ class _AchaParadaPageState extends State<AchaParadaPage> {
 
   final MobileScannerController controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
+    // O frame do bipe é a imagem lida pelo OCR: quanto mais nítida, melhor
+    // o texto da etiqueta é reconhecido.
+    returnImage: true,
+    cameraResolution: const Size(1920, 1080),
   );
   final TextEditingController busca = TextEditingController();
 
   String? codigo;
   bool naoValido = false;
+  bool lendoEtiqueta = false;
+  String? textoDaEtiqueta;
+  String? erroOcr;
   Parada? achadaPeloCodigo;
+  List<ParadaCandidata> achadasPelaEtiqueta = const [];
   List<Parada> achadasPeloEndereco = const [];
+
   DateTime _ultimaLeitura = DateTime.fromMillisecondsSinceEpoch(0);
+  int _geracao = 0;
 
   @override
   void dispose() {
@@ -36,7 +49,15 @@ class _AchaParadaPageState extends State<AchaParadaPage> {
     super.dispose();
   }
 
-  void _onDetect(BarcodeCapture capture) {
+  void _limparResultado() {
+    achadaPeloCodigo = null;
+    achadasPelaEtiqueta = const [];
+    textoDaEtiqueta = null;
+    erroOcr = null;
+    lendoEtiqueta = false;
+  }
+
+  Future<void> _onDetect(BarcodeCapture capture) async {
     final bruto = capture.barcodes.firstOrNull?.rawValue;
     if (bruto == null || bruto.isEmpty) return;
 
@@ -47,31 +68,64 @@ class _AchaParadaPageState extends State<AchaParadaPage> {
     }
     _ultimaLeitura = agora;
 
+    final geracao = ++_geracao;
     final limpo = CodigoRastreio.limpar(bruto);
 
     if (!CodigoRastreio.valido(limpo)) {
       setState(() {
+        _limparResultado();
         codigo = bruto;
         naoValido = true;
-        achadaPeloCodigo = null;
       });
       return;
     }
 
     HapticFeedback.mediumImpact();
 
+    final direta = _rota.buscarPorCodigo(limpo);
+    final imagem = capture.image;
+
     setState(() {
+      _limparResultado();
       codigo = limpo;
       naoValido = false;
-      achadaPeloCodigo = _rota.buscarPorCodigo(limpo);
+      achadaPeloCodigo = direta;
+      lendoEtiqueta = direta == null && imagem != null;
+      if (direta == null && imagem == null) {
+        erroOcr = 'Não consegui capturar a etiqueta. Bipe de novo.';
+      }
     });
+
+    if (direta != null || imagem == null) return;
+
+    try {
+      final texto = await EtiquetaOcrService.ler(imagem);
+      if (!mounted || geracao != _geracao) return;
+
+      setState(() {
+        lendoEtiqueta = false;
+        textoDaEtiqueta = texto;
+        achadasPelaEtiqueta = CombinarEndereco.procurar(texto, _rota.paradas);
+      });
+    } catch (_) {
+      if (!mounted || geracao != _geracao) return;
+
+      setState(() {
+        lendoEtiqueta = false;
+        erroOcr = 'Não consegui ler o texto da etiqueta.';
+      });
+    }
   }
 
   void _buscarEndereco(String texto) {
     setState(() => achadasPeloEndereco = _rota.buscarPorEndereco(texto));
   }
 
-  Widget _cartaoParada(Parada parada, {bool destaque = false}) {
+  Widget _cartaoParada(
+    Parada parada, {
+    bool destaque = false,
+    String? selo,
+  }) {
     final colors = Theme.of(context).colorScheme;
 
     return Card(
@@ -98,9 +152,12 @@ class _AchaParadaPageState extends State<AchaParadaPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    parada.pacotes == null
-                        ? 'Parada ${parada.id}'
-                        : 'Parada ${parada.id} • ${parada.pacotes} pacote${parada.pacotes == 1 ? '' : 's'}',
+                    [
+                      'Parada ${parada.id}',
+                      if (parada.pacotes != null)
+                        '${parada.pacotes} pacote${parada.pacotes == 1 ? '' : 's'}',
+                      ?selo,
+                    ].join(' • '),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -128,14 +185,16 @@ class _AchaParadaPageState extends State<AchaParadaPage> {
     );
   }
 
-  Widget _resultadoDoCodigo() {
+  Widget _resultadoDoBipe() {
     final colors = Theme.of(context).colorScheme;
+    final apagado = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
 
     if (codigo == null) {
       return Text(
-        'Bipe o pacote ou digite o endereço da etiqueta.',
+        'Bipe o pacote com o código e o endereço da etiqueta '
+        'aparecendo juntos na câmera.',
         textAlign: TextAlign.center,
-        style: TextStyle(color: colors.onSurfaceVariant),
+        style: apagado,
       );
     }
 
@@ -143,28 +202,123 @@ class _AchaParadaPageState extends State<AchaParadaPage> {
       return Text(
         'Esse código não é de pacote Anjun/iMile ($codigo).',
         textAlign: TextAlign.center,
-        style: TextStyle(color: colors.onSurfaceVariant),
+        style: apagado,
       );
     }
 
-    final parada = achadaPeloCodigo;
+    final titulo = Text(
+      codigo!,
+      textAlign: TextAlign.center,
+      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+    );
 
-    if (parada != null) return _cartaoParada(parada, destaque: true);
+    if (achadaPeloCodigo != null) {
+      return Column(
+        children: [
+          titulo,
+          const SizedBox(height: 8),
+          _cartaoParada(achadaPeloCodigo!, destaque: true),
+        ],
+      );
+    }
+
+    if (lendoEtiqueta) {
+      return Column(
+        children: [
+          titulo,
+          const SizedBox(height: 10),
+          const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+          const SizedBox(height: 8),
+          Text('Lendo o endereço da etiqueta...', style: apagado),
+        ],
+      );
+    }
+
+    if (erroOcr != null) {
+      return Column(
+        children: [
+          titulo,
+          const SizedBox(height: 6),
+          Text(erroOcr!, textAlign: TextAlign.center, style: apagado),
+        ],
+      );
+    }
+
+    if (achadasPelaEtiqueta.isEmpty) {
+      return Column(
+        children: [
+          titulo,
+          const SizedBox(height: 6),
+          Text(
+            'Não achei uma parada com o endereço dessa etiqueta. '
+            'Tente enquadrar melhor o endereço ou digite abaixo.',
+            textAlign: TextAlign.center,
+            style: apagado,
+          ),
+          if ((textoDaEtiqueta ?? '').trim().isNotEmpty)
+            TextButton(
+              onPressed: _mostrarTextoLido,
+              child: const Text('Ver o que foi lido da etiqueta'),
+            ),
+        ],
+      );
+    }
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          codigo!,
-          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Esse código não aparece na tela da rota. Digite parte do '
-          'endereço da etiqueta (rua e número) pra achar a parada.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
+        titulo,
+        const SizedBox(height: 8),
+        for (var i = 0; i < achadasPelaEtiqueta.length; i++)
+          _cartaoParada(
+            achadasPelaEtiqueta[i].parada,
+            destaque: i == 0,
+            selo: achadasPelaEtiqueta[i].exata ? null : 'confira',
+          ),
+        if (achadasPelaEtiqueta.length > 1)
+          Text(
+            'Mais de uma parada combina — confira o número na etiqueta.',
+            textAlign: TextAlign.center,
+            style: apagado,
+          ),
+        TextButton(
+          onPressed: _mostrarTextoLido,
+          child: const Text('Ver o que foi lido da etiqueta'),
         ),
       ],
+    );
+  }
+
+  void _mostrarTextoLido() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Texto lido da etiqueta',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: SelectableText(textoDaEtiqueta ?? ''),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -184,7 +338,7 @@ class _AchaParadaPageState extends State<AchaParadaPage> {
       body: Column(
         children: [
           SizedBox(
-            height: 200,
+            height: 240,
             width: double.infinity,
             child: MobileScanner(controller: controller, onDetect: _onDetect),
           ),
@@ -192,7 +346,7 @@ class _AchaParadaPageState extends State<AchaParadaPage> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                _resultadoDoCodigo(),
+                _resultadoDoBipe(),
                 const SizedBox(height: 14),
                 TextField(
                   controller: busca,
@@ -200,7 +354,7 @@ class _AchaParadaPageState extends State<AchaParadaPage> {
                   textInputAction: TextInputAction.search,
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.search),
-                    hintText: 'Endereço (ex.: alameda verde 100)',
+                    hintText: 'Ou digite o endereço (ex.: alameda verde 100)',
                     border: const OutlineInputBorder(),
                     suffixIcon: busca.text.isEmpty
                         ? null
