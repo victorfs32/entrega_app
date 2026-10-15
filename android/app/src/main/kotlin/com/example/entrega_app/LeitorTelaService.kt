@@ -55,7 +55,11 @@ class LeitorTelaService : AccessibilityService() {
             // Ordem de leitura: de cima pra baixo, da esquerda pra direita.
             itens.sortWith(compareBy<Item>({ it.topo / 12 }, { it.esquerda }))
 
-            val linhas = itens.map { it.texto }.distinct()
+            // Cada texto vai com a posição na tela (topo, esquerda, base,
+            // direita): é o que permite separar as linhas de uma lista.
+            val linhas = itens
+                .distinctBy { Triple(it.texto, it.topo, it.esquerda) }
+                .map { listOf<Any>(it.texto, it.topo, it.esquerda, it.base, it.direita) }
             guardar(linhas)
         } catch (_: Exception) {
             // Tela mudou no meio da leitura; a próxima captura pega.
@@ -70,7 +74,7 @@ class LeitorTelaService : AccessibilityService() {
         if (!texto.isNullOrEmpty() && no.isVisibleToUser) {
             val area = Rect()
             no.getBoundsInScreen(area)
-            saida.add(Item(texto, area.top, area.left))
+            saida.add(Item(texto, area.top, area.left, area.bottom, area.right))
         }
 
         for (i in 0 until no.childCount) {
@@ -78,7 +82,13 @@ class LeitorTelaService : AccessibilityService() {
         }
     }
 
-    private class Item(val texto: String, val topo: Int, val esquerda: Int)
+    private class Item(
+        val texto: String,
+        val topo: Int,
+        val esquerda: Int,
+        val base: Int,
+        val direita: Int
+    )
 
     companion object {
         @Volatile var instancia: LeitorTelaService? = null
@@ -86,11 +96,11 @@ class LeitorTelaService : AccessibilityService() {
         @Volatile var pacoteAlvo: String = ""
 
         private const val MAXIMO_TELAS = 600
-        private val telas = ArrayList<List<String>>()
+        private val telas = ArrayList<List<List<Any>>>()
         private val vistas = HashSet<Int>()
 
         @Synchronized
-        fun guardar(linhas: List<String>) {
+        fun guardar(linhas: List<List<Any>>) {
             // Mesma tela lida de novo (ex.: parado sem rolar) não entra duas vezes.
             if (!vistas.add(linhas.hashCode())) return
             if (telas.size >= MAXIMO_TELAS) telas.removeAt(0)
@@ -99,7 +109,7 @@ class LeitorTelaService : AccessibilityService() {
 
         /** Devolve as telas lidas desde a última busca e esvazia a fila. */
         @Synchronized
-        fun retirar(): List<List<String>> {
+        fun retirar(): List<List<List<Any>>> {
             val copia = ArrayList(telas)
             telas.clear()
             vistas.clear()

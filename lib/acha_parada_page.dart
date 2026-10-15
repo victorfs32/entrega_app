@@ -5,8 +5,9 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'services/rota_lida_service.dart';
 import 'utils/codigo_rastreio.dart';
 
-/// Bipa um pacote e mostra em qual parada da rota (lida do outro app) ele
-/// está. Fica escaneando em sequência: é só apontar pro próximo pacote.
+/// Acha a parada da rota (lida do outro app) de um pacote: bipando o código,
+/// quando o outro app mostra o código junto da parada, ou digitando parte do
+/// endereço (rua, número) — que é o que está na etiqueta do pacote.
 class AchaParadaPage extends StatefulWidget {
   const AchaParadaPage({super.key});
 
@@ -15,18 +16,23 @@ class AchaParadaPage extends StatefulWidget {
 }
 
 class _AchaParadaPageState extends State<AchaParadaPage> {
+  final _rota = RotaLidaService.instance;
+
   final MobileScannerController controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
   );
+  final TextEditingController busca = TextEditingController();
 
   String? codigo;
-  List<String>? linhas;
   bool naoValido = false;
+  Parada? achadaPeloCodigo;
+  List<Parada> achadasPeloEndereco = const [];
   DateTime _ultimaLeitura = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void dispose() {
     controller.dispose();
+    busca.dispose();
     super.dispose();
   }
 
@@ -46,8 +52,8 @@ class _AchaParadaPageState extends State<AchaParadaPage> {
     if (!CodigoRastreio.valido(limpo)) {
       setState(() {
         codigo = bruto;
-        linhas = null;
         naoValido = true;
+        achadaPeloCodigo = null;
       });
       return;
     }
@@ -56,92 +62,108 @@ class _AchaParadaPageState extends State<AchaParadaPage> {
 
     setState(() {
       codigo = limpo;
-      linhas = RotaLidaService.instance.buscar(limpo);
       naoValido = false;
+      achadaPeloCodigo = _rota.buscarPorCodigo(limpo);
     });
   }
 
-  Widget _resultado(BuildContext context) {
+  void _buscarEndereco(String texto) {
+    setState(() => achadasPeloEndereco = _rota.buscarPorEndereco(texto));
+  }
+
+  Widget _cartaoParada(Parada parada, {bool destaque = false}) {
     final colors = Theme.of(context).colorScheme;
-    final tema = Theme.of(context).textTheme;
+
+    return Card(
+      color: destaque ? colors.primaryContainer : null,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: colors.primary,
+              child: Text(
+                parada.id,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: parada.id.length > 2 ? 14 : 18,
+                  color: colors.onPrimary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    parada.pacotes == null
+                        ? 'Parada ${parada.id}'
+                        : 'Parada ${parada.id} • ${parada.pacotes} pacote${parada.pacotes == 1 ? '' : 's'}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                  Text(
+                    parada.endereco,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if (parada.local != null)
+                    Text(
+                      parada.local!,
+                      style: TextStyle(color: colors.onSurfaceVariant),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _resultadoDoCodigo() {
+    final colors = Theme.of(context).colorScheme;
 
     if (codigo == null) {
       return Text(
-        'Aponte a câmera para o código de barras do pacote.',
+        'Bipe o pacote ou digite o endereço da etiqueta.',
         textAlign: TextAlign.center,
         style: TextStyle(color: colors.onSurfaceVariant),
       );
     }
 
     if (naoValido) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.help_outline, size: 32),
-          const SizedBox(height: 6),
-          Text('Esse código não é de pacote Anjun/iMile.', style: tema.titleMedium),
-          Text(codigo!, style: TextStyle(color: colors.onSurfaceVariant)),
-        ],
+      return Text(
+        'Esse código não é de pacote Anjun/iMile ($codigo).',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: colors.onSurfaceVariant),
       );
     }
 
-    final encontrado = linhas;
+    final parada = achadaPeloCodigo;
 
-    if (encontrado == null) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.search_off, size: 34, color: colors.error),
-          const SizedBox(height: 6),
-          Text(
-            'Não está na rota lida',
-            style: tema.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 2),
-          Text(codigo!, style: TextStyle(color: colors.onSurfaceVariant)),
-          const SizedBox(height: 6),
-          Text(
-            'Leia a rota de novo, abrindo a parada desse pacote.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
-          ),
-        ],
-      );
-    }
+    if (parada != null) return _cartaoParada(parada, destaque: true);
 
     return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Icon(Icons.place, color: Colors.green),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Parada encontrada',
-                style: tema.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-              ),
-            ),
-            Text(
-              CodigoRastreio.transportadora(codigo!),
-              style: TextStyle(color: colors.onSurfaceVariant),
-            ),
-          ],
+        Text(
+          codigo!,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
         ),
-        const SizedBox(height: 8),
-        // Linhas de texto em volta do código na tela do outro app: o número
-        // da parada e o endereço aparecem aqui.
-        for (final linha in encontrado)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 1.5),
-            child: Text(
-              linha,
-              style: linha.contains(codigo!)
-                  ? const TextStyle(fontWeight: FontWeight.w800)
-                  : null,
-            ),
-          ),
+        const SizedBox(height: 4),
+        Text(
+          'Esse código não aparece na tela da rota. Digite parte do '
+          'endereço da etiqueta (rua e número) pra achar a parada.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
+        ),
       ],
     );
   }
@@ -161,18 +183,51 @@ class _AchaParadaPageState extends State<AchaParadaPage> {
       ),
       body: Column(
         children: [
-          Expanded(
-            flex: 5,
+          SizedBox(
+            height: 200,
+            width: double.infinity,
             child: MobileScanner(controller: controller, onDetect: _onDetect),
           ),
           Expanded(
-            flex: 4,
-            child: SafeArea(
-              top: false,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(18),
-                child: Center(child: _resultado(context)),
-              ),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _resultadoDoCodigo(),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: busca,
+                  onChanged: _buscarEndereco,
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search),
+                    hintText: 'Endereço (ex.: alameda verde 100)',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: busca.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              busca.clear();
+                              _buscarEndereco('');
+                            },
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (busca.text.trim().isNotEmpty && achadasPeloEndereco.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      'Nenhuma parada com esse endereço na rota lida.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                for (final parada in achadasPeloEndereco.take(8))
+                  _cartaoParada(parada),
+              ],
             ),
           ),
         ],

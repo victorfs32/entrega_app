@@ -270,11 +270,11 @@ class _LeitorRotaPageState extends State<LeitorRotaPage>
               padding: const EdgeInsets.all(16),
               children: [
                 PainelHero(
-                  rotulo: 'Pacotes na rota lida',
-                  valor: _rota.totalCodigos.toDouble(),
+                  rotulo: 'Paradas na rota lida',
+                  valor: _rota.totalParadas.toDouble(),
                   dinheiro: false,
                   apoio: lendo
-                      ? 'Lendo agora — $novosNaSessao novo(s) nesta leitura'
+                      ? 'Lendo agora — $novosNaSessao parada(s) nova(s) nesta leitura'
                       : (_rota.nomeAlvo == null
                             ? 'Nenhum app escolhido ainda'
                             : 'App: ${_rota.nomeAlvo}'),
@@ -326,13 +326,13 @@ class _LeitorRotaPageState extends State<LeitorRotaPage>
                   numero: 3,
                   titulo: 'Ler a rota',
                   texto: lendo
-                      ? 'Agora vá no app, abra a lista de paradas e role a '
-                            'tela devagar. Se os pacotes só aparecem dentro de '
-                            'cada parada, abra uma por uma. Volte aqui e '
-                            'toque em "Parar" quando terminar.'
+                      ? 'Agora vá no app, abra a lista da rota e role devagar até o '
+                            'fim. O Baixa Fácil guarda o ID, o endereço e a '
+                            'quantidade de pacotes de cada parada. Volte aqui '
+                            'e toque em "Parar" quando terminar.'
                       : 'Toque em "Começar": o app da rota abre e o Baixa '
                             'Fácil lê o que aparecer na tela.',
-                  feito: _rota.totalCodigos > 0 && !lendo,
+                  feito: _rota.totalParadas > 0 && !lendo,
                   acao: lendo
                       ? FilledButton.icon(
                           onPressed: _parar,
@@ -347,7 +347,7 @@ class _LeitorRotaPageState extends State<LeitorRotaPage>
                 ),
                 const SizedBox(height: 6),
                 FilledButton.tonalIcon(
-                  onPressed: _rota.totalCodigos == 0
+                  onPressed: _rota.totalParadas == 0
                       ? null
                       : () => Navigator.push(
                           context,
@@ -356,7 +356,7 @@ class _LeitorRotaPageState extends State<LeitorRotaPage>
                           ),
                         ),
                   icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Bipar pacote e ver a parada'),
+                  label: const Text('Achar a parada de um pacote'),
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -371,13 +371,32 @@ class _LeitorRotaPageState extends State<LeitorRotaPage>
                     const SizedBox(width: 10),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _rota.totalCodigos == 0 ? null : _limpar,
+                        onPressed: _rota.totalParadas == 0 ? null : _limpar,
                         icon: const Icon(Icons.delete_outline),
                         label: const Text('Limpar'),
                       ),
                     ),
                   ],
                 ),
+                if (_rota.totalParadas > 0) ...[
+                  const SizedBox(height: 10),
+                  const TituloSecao('Paradas lidas'),
+                  for (final parada in _rota.paradas)
+                    Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: CircleAvatar(child: Text(parada.id)),
+                        title: Text(parada.endereco),
+                        subtitle: Text(
+                          [
+                            if (parada.local != null) parada.local!,
+                            if (parada.pacotes != null)
+                              '${parada.pacotes} pacote${parada.pacotes == 1 ? '' : 's'}',
+                          ].join(' • '),
+                        ),
+                      ),
+                    ),
+                ],
               ],
             ),
     );
