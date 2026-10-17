@@ -20,7 +20,11 @@ class Lancamento {
   final double valorAnjun;
   final double valorImile;
 
+  /// Rota do lançamento (ex.: Eusébio, Aquiraz), quando informada.
+  final String? rota;
+
   const Lancamento({
+    this.rota,
     this.id = '',
     required this.dia,
     required this.anjun,
@@ -51,9 +55,16 @@ class Lancamento {
       imile: (dados['imile'] as num?)?.toInt() ?? 0,
       valorAnjun: numero(dados['valorAnjun'], 0),
       valorImile: numero(dados['valorImile'], 0),
+      rota: (dados['rota'] as String?)?.isEmpty == true
+          ? null
+          : dados['rota'] as String?,
     );
   }
 }
+
+/// Rotas do motorista e o valor pago por pacote em cada uma. Escolher a rota
+/// num lançamento já preenche o valor por pacote (dá pra ajustar depois).
+const Map<String, double> valoresPorRota = {'Eusébio': 2.80, 'Aquiraz': 3.20};
 
 class LancamentosService {
   LancamentosService._();
@@ -124,6 +135,7 @@ class LancamentosService {
     required int imile,
     required double valorAnjun,
     required double valorImile,
+    String? rota,
   }) async {
     final usuario = FirebaseAuth.instance.currentUser;
     if (usuario == null) throw Exception('Faça login novamente.');
@@ -139,6 +151,7 @@ class LancamentosService {
       'imile': imile,
       'valorAnjun': valorAnjun,
       'valorImile': valorImile,
+      'rota': rota,
       'atualizadoEm': Timestamp.now(),
     };
 

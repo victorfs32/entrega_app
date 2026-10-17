@@ -41,6 +41,9 @@ class _LancamentoPageState extends State<LancamentoPage> {
   bool carregandoValores = true;
   bool salvando = false;
 
+  /// Rota escolhida (null = sem rota); no lançamento novo começa sem.
+  String? rota;
+
   Lancamento? get _editando => widget.lancamento;
 
   @override
@@ -115,6 +118,8 @@ class _LancamentoPageState extends State<LancamentoPage> {
   void _preencherCampos() {
     final existente = _editando;
 
+    rota = existente?.rota;
+
     anjunController.text = existente != null ? '${existente.anjun}' : '';
     imileController.text = existente != null ? '${existente.imile}' : '';
 
@@ -185,6 +190,7 @@ class _LancamentoPageState extends State<LancamentoPage> {
     try {
       await LancamentosService.salvar(
         id: _editando?.id,
+        rota: rota,
         dia: dia,
         anjun: anjun,
         imile: imile,
@@ -255,6 +261,57 @@ class _LancamentoPageState extends State<LancamentoPage> {
   void _aviso(String mensagem) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(mensagem), backgroundColor: Colors.red),
+    );
+  }
+
+  /// Escolher a rota preenche o valor por pacote dela; tocar de novo tira.
+  void _escolherRota(String nome) {
+    setState(() {
+      if (rota == nome) {
+        rota = null;
+        return;
+      }
+
+      rota = nome;
+      final valor = _dinheiro(valoresPorRota[nome] ?? 0);
+      valorAnjunController.text = valor;
+      valorImileController.text = valor;
+    });
+  }
+
+  Widget _seletorRota() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Rota',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entrada in valoresPorRota.entries)
+                  ChoiceChip(
+                    label: Text(
+                      '${entrada.key} • R\$ ${_dinheiro(entrada.value)}',
+                    ),
+                    selected: rota == entrada.key,
+                    onSelected: salvando
+                        ? null
+                        : (_) => _escolherRota(entrada.key),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -381,6 +438,7 @@ class _LancamentoPageState extends State<LancamentoPage> {
                     ),
                   ),
                   const SizedBox(height: 6),
+                  _seletorRota(),
                   _campoEmpresa(
                     nome: 'Anjun',
                     icone: Icons.local_shipping_outlined,
