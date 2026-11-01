@@ -4,10 +4,6 @@ on:
   push:
     branches:
       - main
-    # O app React Native (pasta mobile/) tem o próprio workflow.
-    paths-ignore:
-      - "mobile/**"
-      - ".github/workflows/release-apk-mobile.yml"
 
 permissions:
   contents: write
