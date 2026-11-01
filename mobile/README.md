@@ -20,9 +20,10 @@ financeiro/relatórios, assinatura Pix e atualização automática.
 
 ## Como rodar
 
-1. Aplique `supabase/migrations/0001_entregas.sql` no projeto Supabase
+1. O banco já está no projeto Supabase **entregas**. Num projeto novo, aplique
+   os arquivos de `supabase/migrations/` em ordem
    (SQL Editor > colar e executar, ou `supabase db push`).
-2. Copie `.env.example` para `.env` e preencha a URL e a chave pública do projeto.
+2. O `.env` já aponta para o projeto **entregas** (só a chave pública).
 3. `npm install`
 4. `npx expo start` e abra no celular com o app **Expo Go** (lendo o QR code).
 

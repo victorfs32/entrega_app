@@ -90,7 +90,9 @@ create function public.proteger_campos_motorista() returns trigger
 language plpgsql security definer set search_path = ''
 as $$
 begin
-  if public.eh_admin() then
+  -- Sem usuario logado (SQL Editor, service role, gatilho do Auth) ou admin:
+  -- pode tudo. Assim da pra promover o primeiro admin pelo painel.
+  if (select auth.uid()) is null or public.eh_admin() then
     return new;
   end if;
   if tg_op = 'INSERT' then
