@@ -2,7 +2,7 @@
   "expo": {
     "name": "Entregas",
     "slug": "entrega-app",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -17,7 +17,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.victorfs32.entregas"
+      "package": "com.victorfs32.entregas",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -35,7 +36,8 @@
         {
           "locationWhenInUsePermission": "O app guarda o local onde a entrega foi feita."
         }
-      ]
+      ],
+      "./plugins/assinatura-release"
     ],
     "scheme": "entregaapp"
   }

@@ -1,15 +1,44 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Alert, Linking, Text, View } from 'react-native';
 import { AuthProvider, useAuth } from '../lib/auth';
+import { temAtualizacao, useConfigApp, versaoAtual } from '../lib/configApp';
 import { supabaseConfigurado } from '../lib/supabase';
 import { Botao, Carregando, estilos } from '../ui/componentes';
 import { cores } from '../ui/tema';
 
 function Rotas() {
   const { carregando, sessao, motorista, sair } = useAuth();
+  const { config, carregando: carregandoConfig } = useConfigApp();
+  const avisou = useRef(false);
 
-  if (carregando) return <Carregando />;
+  // Avisa uma vez por abertura quando o Actions publicou um APK mais novo.
+  useEffect(() => {
+    if (avisou.current || !config || !temAtualizacao(config)) return;
+    avisou.current = true;
+    Alert.alert(
+      `Nova versão ${config.ultimaVersao}`,
+      `${config.notasAtualizacao ?? 'Nova versão disponível.'}\n\nVocê está na ${versaoAtual}.`,
+      [
+        { text: 'Depois', style: 'cancel' },
+        { text: 'Atualizar', onPress: () => Linking.openURL(config.apkUrl!) },
+      ],
+    );
+  }, [config]);
+
+  if (carregando || carregandoConfig) return <Carregando />;
+
+  // Modo manutenção vale para todos, menos admin.
+  if (config?.manutencao && !motorista?.admin) {
+    return (
+      <View style={[estilos.tela, estilos.conteudo, { justifyContent: 'center' }]}>
+        <Text style={estilos.titulo}>Em manutenção</Text>
+        <Text style={estilos.texto}>{config.mensagemManutencao ?? 'O app volta em breve.'}</Text>
+        {sessao ? <Botao titulo="Sair" onPress={sair} variante="secundario" /> : null}
+      </View>
+    );
+  }
 
   // Logado mas sem perfil ou com a conta desativada pelo admin.
   if (sessao && (!motorista || !motorista.ativo)) {
