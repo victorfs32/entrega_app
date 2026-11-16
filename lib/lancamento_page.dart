@@ -161,6 +161,14 @@ class _LancamentoPageState extends State<LancamentoPage> {
 
     setState(() {
       dia = DateTime(escolhida.year, escolhida.month, escolhida.day);
+
+      // O valor da rota depende da data (incentivo), então trocar o dia com
+      // rota escolhida atualiza o valor por pacote.
+      final valorRota = rota == null ? null : valorDaRota(rota!, dia);
+      if (valorRota != null) {
+        valorAnjunController.text = _dinheiro(valorRota);
+        valorImileController.text = _dinheiro(valorRota);
+      }
     });
   }
 
@@ -273,7 +281,7 @@ class _LancamentoPageState extends State<LancamentoPage> {
       }
 
       rota = nome;
-      final valor = _dinheiro(valoresPorRota[nome] ?? 0);
+      final valor = _dinheiro(valorDaRota(nome, dia) ?? 0);
       valorAnjunController.text = valor;
       valorImileController.text = valor;
     });
@@ -297,15 +305,13 @@ class _LancamentoPageState extends State<LancamentoPage> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final entrada in valoresPorRota.entries)
+                for (final nome in valoresPorRota.keys)
                   ChoiceChip(
                     label: Text(
-                      '${entrada.key} • R\$ ${_dinheiro(entrada.value)}',
+                      '$nome • R\$ ${_dinheiro(valorDaRota(nome, dia) ?? 0)}',
                     ),
-                    selected: rota == entrada.key,
-                    onSelected: salvando
-                        ? null
-                        : (_) => _escolherRota(entrada.key),
+                    selected: rota == nome,
+                    onSelected: salvando ? null : (_) => _escolherRota(nome),
                   ),
               ],
             ),

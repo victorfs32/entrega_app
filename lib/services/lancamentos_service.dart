@@ -62,9 +62,47 @@ class Lancamento {
   }
 }
 
-/// Rotas do motorista e o valor pago por pacote em cada uma. Escolher a rota
-/// num lançamento já preenche o valor por pacote (dá pra ajustar depois).
+/// Rotas do motorista e o valor normal pago por pacote em cada uma. Escolher
+/// a rota num lançamento já preenche o valor por pacote (dá pra ajustar
+/// depois). Mesma tabela do dashboard (dashboard-entregas/src/utils/rotas.js).
 const Map<String, double> valoresPorRota = {'Eusébio': 2.80, 'Aquiraz': 3.20};
+
+/// Período de incentivo: dentro dele (datas inclusivas) o valor da rota muda.
+class IncentivoRota {
+  final DateTime inicio;
+  final DateTime fim;
+  final Map<String, double> valores;
+
+  const IncentivoRota({
+    required this.inicio,
+    required this.fim,
+    required this.valores,
+  });
+}
+
+final List<IncentivoRota> incentivosRota = [
+  // 2ª quinzena de novembro + as duas quinzenas de dezembro de 2026.
+  IncentivoRota(
+    inicio: DateTime(2026, 11, 16),
+    fim: DateTime(2026, 12, 31),
+    valores: const {'Eusébio': 2.85, 'Aquiraz': 3.25},
+  ),
+];
+
+/// Valor por pacote da [rota] no [dia] — o de incentivo, se o dia cair num
+/// período de incentivo, senão o normal. `null` se a rota não existe.
+double? valorDaRota(String rota, DateTime dia) {
+  final normal = valoresPorRota[rota];
+  if (normal == null) return null;
+
+  final d = DateTime(dia.year, dia.month, dia.day);
+  for (final incentivo in incentivosRota) {
+    if (!d.isBefore(incentivo.inicio) && !d.isAfter(incentivo.fim)) {
+      return incentivo.valores[rota] ?? normal;
+    }
+  }
+  return normal;
+}
 
 class LancamentosService {
   LancamentosService._();
